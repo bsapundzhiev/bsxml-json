@@ -1,0 +1,20 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 11.00
+# Visual Studio 2010
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "bsxml", "bsxml.vcxproj", "{510DB254-6B8C-4E57-8EB0-0B02B54A389C}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Release|Win32 = Release|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{510DB254-6B8C-4E57-8EB0-0B02B54A389C}.Debug|Win32.ActiveCfg = Debug|Win32
+		{510DB254-6B8C-4E57-8EB0-0B02B54A389C}.Debug|Win32.Build.0 = Debug|Win32
+		{510DB254-6B8C-4E57-8EB0-0B02B54A389C}.Release|Win32.ActiveCfg = Release|Win32
+		{510DB254-6B8C-4E57-8EB0-0B02B54A389C}.Release|Win32.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

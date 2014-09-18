@@ -1,0 +1,10 @@
+/Debug/
+/old/
+/test/
+*.suo
+*.vcxproj.user
+*.lib
+*.a
+/.gitignore
+/expat.h
+/expat_external.h
