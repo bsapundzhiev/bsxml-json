@@ -232,16 +232,14 @@ void XmlNode_setValue(struct XmlNode *node, const String value )
 	if(!isNullorEmpty(value) && !XmlNode_isEmptyValue(value)) {
 		//printf("value for %s = '%s'\n",node->m_tag, value );
 		if(node->m_content != NULL) {
-			int end = strlen(node->m_content);
-			int len = strlen(value);
-			char *new = realloc(node->m_content,(end + len +1));
+			size_t end = strlen(node->m_content);
+			size_t len = strlen(value);
+			unsigned last = isAlphaNumeric(*(node->m_content + end-1)) ? 2:1;
+			char *new = realloc(node->m_content,(end + len + last));
 			if(!new) return; 
 			node->m_content = new;
 			
-			if(isAlphaNumeric( *(node->m_content + end-1) )) {
-				new = realloc(node->m_content, (end + len +2));
-				if(!new) return;
-				node->m_content = new;
+			if(last == 2) {
 				strcat(node->m_content, " ");
 				end+=1;
 			}

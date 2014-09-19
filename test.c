@@ -8,6 +8,82 @@
 #include "bsxml.h"
 #include "bsjson.h"
 
+#ifdef _WIN32
+#include <windows.h>
+#include <time.h>
+#else 
+#include <sys/time.h>
+#endif
+#ifdef _WIN32
+
+HANDLE hConsole; 
+CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
+WORD saved_attributes;
+
+static const unsigned __int64 epoch = (__int64)(116444736000000000);
+int gettimeofday(struct timeval * tp, struct timezone * tzp)
+{
+       FILETIME    file_time;
+       SYSTEMTIME  system_time;
+       ULARGE_INTEGER ularge;
+   
+       GetSystemTime(&system_time);
+       SystemTimeToFileTime(&system_time, &file_time);
+       ularge.LowPart = file_time.dwLowDateTime;
+       ularge.HighPart = file_time.dwHighDateTime;
+   
+       tp->tv_sec = (long) ((ularge.QuadPart - epoch) / 10000000L);
+       tp->tv_usec = (long) (system_time.wMilliseconds * 1000);
+   
+       return 0;
+}
+
+void set_color() {
+	hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+    GetConsoleScreenBufferInfo(hConsole, &consoleInfo);
+    saved_attributes = consoleInfo.wAttributes;
+    SetConsoleTextAttribute(hConsole, FOREGROUND_GREEN);
+}
+void restore_color() {
+    SetConsoleTextAttribute(hConsole, saved_attributes);
+}
+#else
+void set_color() { printf( "\033"); }
+void restore_color() { printf("\033"); }
+#endif
+
+struct ctmr {
+	struct timeval start, end;
+};
+
+void clock_init(struct ctmr *t) {
+	memset(&(t)->start, 0, sizeof(struct timeval));
+	memset(&(t)->end, 0, sizeof(struct timeval));
+}
+
+void clock_on(struct ctmr *t) {
+	gettimeofday(&(t)->start, NULL);
+}
+
+long clock_off(struct ctmr *t) {
+	long secs, usecs;    
+	gettimeofday(&(t)->end, NULL);
+	secs  = t->end.tv_sec  - t->start.tv_sec;
+	usecs = t->end.tv_usec - t->start.tv_usec;
+	return (long)(((secs) * 1000 + usecs/1000.0) + 0.5);
+}
+
+struct ctmr t;
+
+#define CLK_ON(x) \
+	clock_init(x); \
+	clock_on(x); \
+
+#define CLK_OFF(x)\
+	set_color();\
+	printf("[%s] end in %ld ms\n",__FUNCTION__, clock_off(x));\
+	restore_color();\
+
 static const char xml[] = "<?xml version=\"1.0\"?>\n\
 <A:propfind xmlns:A=\"DAV:\">\n\
     <A:prop>\n\
@@ -72,8 +148,7 @@ void printXml( XmlNodeRef node )
 void create_test ()
 {
 	XmlNodeRef root, child1, child2, child3;
-
-	printf("[%s]\n",__FUNCTION__);
+	CLK_ON(&t);
 	root   = XmlNode_Create( "ROOT" ); 
 	child1 = XmlNode_createChild(root, 	"FirstChild", NULL);
 	child2 = XmlNode_createChild(root,	"SecondChild", NULL);
@@ -85,15 +160,15 @@ void create_test ()
 	
 	printXml(root);
 	XmlNode_deleteTree(root);
+	CLK_OFF(&t);
 }
 
 void find_test()
 {
 	int i;
-	
 	XmlParser xmlParser;
 	XmlNodeRef root = XmlParser_parse(&xmlParser,  xml );
-	printf("[%s]\n",__FUNCTION__);
+	CLK_ON(&t);
 	if (root) {
 	
 		for (i = 0; i < XmlNode_getChildCount(root); i++) {
@@ -112,6 +187,7 @@ void find_test()
 		}
 
 	XmlNode_deleteTree(root);
+	CLK_OFF(&t);
 }
 	
 void file_test(int argc, char **argv)
@@ -119,12 +195,12 @@ void file_test(int argc, char **argv)
 	String param = "test/test3.xml";
 	XmlNodeRef root;
 	XmlParser xmlParser;
-	printf("[%s]\n",__FUNCTION__);
+	
 	if(argc > 1) {
 		param = argv[argc-1];
 		printf("parse file %s\n", param);
 	}
-	
+	CLK_ON(&t);
 	root = XmlParser_parse_file(&xmlParser, param);
 	
 	if (root) {
@@ -132,6 +208,7 @@ void file_test(int argc, char **argv)
 	}
 	
 	XmlNode_deleteTree(root);
+	CLK_OFF(&t);
 }
 
 void printJson( JsonNode *node ) 
@@ -145,7 +222,7 @@ void json_parser_test()
 {
 	JsonParser parser;
 	JsonNode *root;
-	printf("[%s]\n",__FUNCTION__);
+	CLK_ON(&t);
 	
 	//root = JsonParser_parse(&parser, json2);
 	//root = JsonParser_parse(&parser, json);
@@ -155,13 +232,14 @@ void json_parser_test()
 	}
 
 	JsonNode_deleteTree(root);
+	CLK_OFF(&t);
 }
 
 void json_create_test ()
 {
 	JsonNode *root = JsonNode_Create();
 	JsonNode *address , *phone, *phoneType;
-
+	CLK_ON(&t);
 	JsonNode_setPair(root, "firstName", "John" );
 	JsonNode_setPair(root, "lastName", "Smith" );
 	JsonNode_setPair(root, "age", "25" );
@@ -183,6 +261,7 @@ void json_create_test ()
   
 	printJson( root );
 	JsonNode_deleteTree(root);
+	CLK_OFF(&t);
 }
 
 int main(int argc, char **argv) 
