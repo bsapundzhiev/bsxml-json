@@ -52,7 +52,7 @@ static int cpo_array_preallocate(cpo_array_t *a, int elements)
         return ENOMEM;
 
     memcpy(newv, a->v, a->num * a->elem_size);
-    
+
     if (a->v)
         free(a->v);
 
@@ -109,25 +109,25 @@ void *
 cpo_array_insert_at(cpo_array_t *a, int index)
 {
     int i,nmove;
-	void *elt;
+    void *elt;
     elt =  cpo_array_push(a);
     elt =  cpo_array_get_at(a, index);
-    	
+
     if (index < a->num) {
-          
-		for (i = a->num-1 ; i >= index -1; i--) {   
-			nmove = i + 1;
-         	memmove((unsigned char*)a->v + a->elem_size * nmove, 
-         			(unsigned char*)a->v + a->elem_size * i, a->elem_size);
+
+        for (i = a->num-1 ; i >= index -1; i--) {
+            nmove = i + 1;
+            memmove((unsigned char*)a->v + a->elem_size * nmove,
+                    (unsigned char*)a->v + a->elem_size * i, a->elem_size);
         }
     }
-    
-   //elt = (unsigned char*) a->v + a->elem_size * index;
-   return elt;
+
+    //elt = (unsigned char*) a->v + a->elem_size * index;
+    return elt;
 }
-	
+
 /*
-void * 
+void *
 cpo_array_remove(cpo_array_t *a, int index)
 {
     int nmove;
@@ -144,27 +144,27 @@ cpo_array_remove(cpo_array_t *a, int index)
     return elt;
 }
 */
-void * 
+void *
 cpo_array_remove(cpo_array_t *a, int index)
 {
-	void *elt;
-	int i, nmove;
-	assert(a->num <= a->max);
+    void *elt;
+    int i, nmove;
+    assert(a->num <= a->max);
     assert(index >= 0 && index < a->num);
-    
-    for ( i = index ; i < a->num; i++) {   
-		nmove = i + 1;
-			
-		if(i == index) {
-			memmove((unsigned char*)a->v + a->elem_size * a->num,
-					(unsigned char*)a->v + a->elem_size * i, a->elem_size);		
-		}
-			
-		memmove((unsigned char*)a->v + a->elem_size * i, 
-				(unsigned char*)a->v + a->elem_size * nmove, a->elem_size);
-         
-   	}
-   	
+
+    for ( i = index ; i < a->num; i++) {
+        nmove = i + 1;
+
+        if (i == index) {
+            memmove((unsigned char*)a->v + a->elem_size * a->num,
+                    (unsigned char*)a->v + a->elem_size * i, a->elem_size);
+        }
+
+        memmove((unsigned char*)a->v + a->elem_size * i,
+                (unsigned char*)a->v + a->elem_size * nmove, a->elem_size);
+
+    }
+
     elt = (unsigned char*)a->v + a->elem_size * a->num;
     a->num--;
     return elt;
@@ -229,83 +229,83 @@ void cpo_array_dump_str(cpo_array_t *arr)
     }
 }
 
-/* stack impl */ 
+/* stack impl */
 void * stack_push(cpo_array_t *stack)
 {
-	if (stack->num == stack->max) {
+    if (stack->num == stack->max) {
         fputs("Error: stack overflow\n", stderr);
         return NULL;
-    } 
-    
-	return cpo_array_insert_at(stack, 0);
+    }
+
+    return cpo_array_insert_at(stack, 0);
 }
 
 void * stack_push_back(cpo_array_t *stack)
 {
-	if (stack->num == stack->max) {
+    if (stack->num == stack->max) {
         fputs("Error: stack overflow\n", stderr);
         return NULL;
-    } 
-    
-	return cpo_array_push(stack);
+    }
+
+    return cpo_array_push(stack);
 }
 
 void * stack_back(cpo_array_t *stack)
-{    
-	return cpo_array_get_at(stack, stack->num -1 );
+{
+    return cpo_array_get_at(stack, stack->num -1 );
 }
 
 void * stack_pop(cpo_array_t *stack)
 {
-	if (stack->num == 0) {
+    if (stack->num == 0) {
         fputs("Error: stack underflow\n", stderr);
         return NULL;
-    } 
-    
-	return  cpo_array_remove(stack, 0);
+    }
+
+    return  cpo_array_remove(stack, 0);
 }
 
 void * stack_pop_back(cpo_array_t *stack)
 {
-	if (stack->num == 0) {
+    if (stack->num == 0) {
         fputs("Error: stack underflow\n", stderr);
         return NULL;
-    } 
-    
-	return  cpo_array_remove(stack, stack->num -1);
+    }
+
+    return  cpo_array_remove(stack, stack->num -1);
 }
 
 #if _TEST
 int main()
 {
-	int i;
-	void *x;
-	cpo_array_t arr;
-	
-	arr.elem_size = sizeof(int);
-	arr.v = calloc(32, sizeof(int));
-	arr.num = 0;
-	arr.max = 32;
-	
-	for(i=0; i< 10; i++) {
-	
-	 //x = cpo_array_push(&arr);
-	 
-	 x = stack_push(&arr);
-	 *((int*)x) = i;
-	}
+    int i;
+    void *x;
+    cpo_array_t arr;
 
-	cpo_array_dump_int(&arr);
-	 
-	for(i=0; i< 10; i++) {
-		x = stack_pop_back(&arr);
-		printf("pop %d\n", *((int*)x) ); 
-	}
-	//printf("ins at %d num %d\n", i, arr.num);
-	//x = cpo_array_insert_at(&arr, 6);
-	//*((int*)x) = 5000;*/
-	 
-	cpo_array_dump_int(&arr);
-	free(arr.v);
+    arr.elem_size = sizeof(int);
+    arr.v = calloc(32, sizeof(int));
+    arr.num = 0;
+    arr.max = 32;
+
+    for (i=0; i< 10; i++) {
+
+        //x = cpo_array_push(&arr);
+
+        x = stack_push(&arr);
+        *((int*)x) = i;
+    }
+
+    cpo_array_dump_int(&arr);
+
+    for (i=0; i< 10; i++) {
+        x = stack_pop_back(&arr);
+        printf("pop %d\n", *((int*)x) );
+    }
+    //printf("ins at %d num %d\n", i, arr.num);
+    //x = cpo_array_insert_at(&arr, 6);
+    //*((int*)x) = 5000;*/
+
+    cpo_array_dump_int(&arr);
+    free(arr.v);
 }
-#endif 
+#endif

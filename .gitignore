@@ -8,3 +8,4 @@
 /.gitignore
 /expat.h
 /expat_external.h
+/bsxml

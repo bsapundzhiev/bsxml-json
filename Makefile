@@ -15,3 +15,6 @@ $(EXECUTABLE): $(OBJECTS)
 	
 clean:
 	rm -f $(OBJECTS) $(EXECUTABLE)
+	
+format:
+	astyle --style=stroustrup -s4 $(SOURCES)
