@@ -241,7 +241,7 @@ static int JsonParser_internalBeginObj(struct  ParserInternal *pi, enum eElemTyp
 {
     char *name = bsstr_get_buf(pi->key);
     void *ptr = stack_push_back(&(pi)->stack);
-    ARR_VAL(ptr) = (int)name;
+    ARR_VAL(ptr) = ARR_VAL2PTR(name);
     if (elemType != JSON_ARR_B && elemType != JSON_OBJ_B) {
         pi->error = JSNON_ERR_NOTOBJ;
         return JSON_NOK;
@@ -425,7 +425,7 @@ static void JsonParser_startElem(struct JsonParser *parser, const String name, i
 
     ptr = stack_push_back(parser->m_nodeStack);
     if (ptr != NULL) {
-        ARR_VAL(ptr) = (int)node;
+        ARR_VAL(ptr) = ARR_VAL2PTR(node);
     }
 }
 

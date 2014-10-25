@@ -9,3 +9,4 @@
 /expat.h
 /expat_external.h
 /bsxml
+*.o

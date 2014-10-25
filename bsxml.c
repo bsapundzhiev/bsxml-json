@@ -394,17 +394,16 @@ void XmlNode_toFile(struct XmlNode *node, const char *fileName)
     FILE *f = fopen (fileName, "w+b");
     if (f) {
         char *buffer = XmlNode_getXML(node);
-        size_t wb=0, len = strlen(buffer);
+        size_t len = strlen(buffer);
 
         if (buffer) {
             fprintf(f, "<?xml version=\"1.0\" encoding=\"%s\"?>", ENC_TYPE_UTF8);
-            wb = fwrite(buffer, sizeof(char),len , f);
+            fwrite(buffer, sizeof(char),len , f);
+	    free(buffer);
         }
-        printf("wb %d == %d", wb,len);
         fclose (f);
-        free(buffer);
     } else {
-        printf("error: cant write %s \n", fileName);
+        printf("error: cant to write %s \n", fileName);
     }
 }
 /*parser */
@@ -430,7 +429,7 @@ static void startElement(void *userData, const char *name, const char **atts)
 
     ptr = stack_push_back(parser->m_nodeStack);
     if (ptr != NULL) {
-        ARR_VAL(ptr) = (int)node;
+        ARR_VAL(ptr) = ARR_VAL2PTR(node);
     }
 
     XmlNode_setLine(node, XML_GetCurrentLineNumber( parser->m_parser ) );
