@@ -193,7 +193,7 @@ String JsonNode_getJSON(JsonNode *node)
 /********************************************************************************/
 /* Parse JSON                                                                   */
 /********************************************************************************/
-enum {JSON_ERR_QUOTE,JSON_ERR_COMMA,JSNON_ERR_NOTOBJ};
+enum {JSON_ERR_NONE, JSON_ERR_QUOTE, JSON_ERR_COMMA, JSNON_ERR_NOTOBJ, JSON_ERR_SYN};
 struct  ParserInternal { /*Jsonlexer*/
     int error;
     int line;
@@ -210,8 +210,8 @@ struct  ParserInternal { /*Jsonlexer*/
 
 static void JsonParser_internalCreate(struct ParserInternal *pi)
 {
-    pi->error = JSON_OK;
-    pi->line =0;
+    pi->error = JSON_ERR_NONE;
+    pi->line = 0;
     pi->key = bsstr_create("");
     pi->value = bsstr_create("");
     pi->stack.v = calloc(JSON_STACK_SIZE, sizeof(char*));
@@ -303,6 +303,17 @@ static __inline char JsonParser_next_char(const char *p , int pos)
     return ch;
 }
 
+static __inline char JsonParser_prev_char(const char *p , int pos)
+{
+    char ch;
+    while ( (ch = *(p+ --pos)) != '\0' ) {
+        if (ch != ' ' && ch != '\r' && ch != '\n' && ch != '\t' )
+            break;
+    }
+
+    return ch;
+}
+
 #define JsonParser_peek_char(p,pos)		*(p + pos + 1)
 
 #define JsonParser_peekObjBegin(p,pos)\
@@ -324,8 +335,12 @@ static int JsonParser_internalParse(struct  ParserInternal *pi, const char* json
     enum eElemType elemType;
     const char *p = json;
 
-    for (i =0; i < len + 1 && pi->error != JSON_NOK; i++) {
+    for (i =0; i < len + 1; i++) {
+
+		if(pi->error != JSON_ERR_NONE) break;
+
         ch = p[i];
+
         switch ( elemType = Json_typeOfElem(ch) ) {
 
         case JSON_OBJ_B:
@@ -344,10 +359,19 @@ static int JsonParser_internalParse(struct  ParserInternal *pi, const char* json
         case JSON_QUOTE:
             pi->quote_begin = !pi->quote_begin;
 
+			if( pi->quote_begin) {
+				char prev = JsonParser_prev_char(p, i);
+				if(prev != Json_elem(JSON_COMMA) && prev !=  Json_elem(JSON_COLON)
+					&& prev != Json_elem(JSON_OBJ_B) &&  prev != Json_elem(JSON_ARR_B) ) {
+					pi->error = JSON_ERR_SYN;
+					break;
+				}
+			}
+
             if (!pi->quote_begin && JsonParser_peekObjEnd(p,i)) {
                 JsonParser_internalData(pi);
             }
-            break;
+			break;
         case JSON_COLON:
             /* Begin value */
             if (!pi->quote_begin) {
@@ -407,7 +431,7 @@ static void JsonParser_startElem(struct JsonParser *parser, const String name, i
     void *ptr = NULL;
     JsonNode* parent= NULL, *node=NULL;
 
-    printf("Json_startElem %s type %d\n", name ,type );
+    DEBUG_PRINT("Json_startElem %s type %d\n", name ,type );
 
     if (parser->m_nodeStack->num > 0) {
         ptr = stack_back(parser->m_nodeStack);
@@ -431,7 +455,7 @@ static void JsonParser_startElem(struct JsonParser *parser, const String name, i
 
 static void JsonParser_endElem(struct JsonParser *parser, const String name, int type )
 {
-    printf("Json_endElem %s type %d\n", name ,type );
+    DEBUG_PRINT("Json_endElem %s type %d\n", name ,type );
     assert( parser->m_nodeStack->num > 0 );
     if (parser->m_nodeStack->num > 0) {
         stack_pop_back(parser->m_nodeStack);
@@ -440,7 +464,7 @@ static void JsonParser_endElem(struct JsonParser *parser, const String name, int
 
 static void JsonParser_elemData(struct JsonParser *parser, const String key,  const String value)
 {
-    printf("eleme '%s' => '%s'\n", key, value);
+    DEBUG_PRINT("eleme '%s' => '%s'\n", key, value);
     if (parser->m_nodeStack->num > 0) {
         void *ptr = stack_back(parser->m_nodeStack);
         JsonNode *node = (JsonNode *) ARR_VAL(ptr);
@@ -458,10 +482,10 @@ JsonNode * JsonParser_parse(struct JsonParser *parser, const char * json)
     pi.endElem = JsonParser_endElem;
     pi.elemData = JsonParser_elemData;
     parser->m_nodeStack = cpo_array_create(JSON_STACK_SIZE , sizeof(void*));
-    if (JsonParser_internalParse(&pi, json, strlen(json)) == JSON_OK) {
+    if (JsonParser_internalParse(&pi, json, strlen(json)) == JSON_ERR_NONE) {
         root = parser->m_root;
     } else {
-        printf("TODO: parser error @ %d\n" , pi.line);
+        printf("TODO: parser error:%d @ %d\n", pi.error , pi.line);
     }
     printf("Parsed lines %d\n",  pi.line);
     JsonParser_internalDelete(&pi);

@@ -19,6 +19,13 @@
 #define strdup _strdup
 #endif
 
+//#define DEBUG_JSON
+#ifdef DEBUG_JSON
+#define DEBUG_PRINT printf
+#else
+#define DEBUG_PRINT(...)
+#endif
+
 enum {JSON_NOK, JSON_OK };
 enum {JSON_NONE, JSON_ROOT, JSON_OBJ, JSON_ARRAY } eNodeTypes;
 
