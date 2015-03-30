@@ -337,7 +337,7 @@ static int JsonParser_internalParse(struct  ParserInternal *pi, const char* json
 
     for (i =0; i < len + 1; i++) {
 
-		if(pi->error != JSON_ERR_NONE) break;
+        if(pi->error != JSON_ERR_NONE) break;
 
         ch = p[i];
 
@@ -359,19 +359,19 @@ static int JsonParser_internalParse(struct  ParserInternal *pi, const char* json
         case JSON_QUOTE:
             pi->quote_begin = !pi->quote_begin;
 
-			if( pi->quote_begin) {
-				char prev = JsonParser_prev_char(p, i);
-				if(prev != Json_elem(JSON_COMMA) && prev !=  Json_elem(JSON_COLON)
-					&& prev != Json_elem(JSON_OBJ_B) &&  prev != Json_elem(JSON_ARR_B) ) {
-					pi->error = JSON_ERR_SYN;
-					break;
-				}
-			}
+            if( pi->quote_begin) {
+                char prev = JsonParser_prev_char(p, i);
+                if(prev != Json_elem(JSON_COMMA) && prev !=  Json_elem(JSON_COLON)
+                        && prev != Json_elem(JSON_OBJ_B) &&  prev != Json_elem(JSON_ARR_B) ) {
+                    pi->error = JSON_ERR_SYN;
+                    break;
+                }
+            }
 
             if (!pi->quote_begin && JsonParser_peekObjEnd(p,i)) {
                 JsonParser_internalData(pi);
             }
-			break;
+            break;
         case JSON_COLON:
             /* Begin value */
             if (!pi->quote_begin) {

@@ -10,3 +10,4 @@
 /expat_external.h
 /bsxml
 *.o
+/bsxml-json-test

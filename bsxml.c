@@ -399,7 +399,7 @@ void XmlNode_toFile(struct XmlNode *node, const char *fileName)
         if (buffer) {
             fprintf(f, "<?xml version=\"1.0\" encoding=\"%s\"?>", ENC_TYPE_UTF8);
             fwrite(buffer, sizeof(char),len , f);
-	    free(buffer);
+            free(buffer);
         }
         fclose (f);
     } else {
