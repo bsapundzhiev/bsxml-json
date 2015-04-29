@@ -11,8 +11,6 @@ Build as static libray
 
 $make static 
 
-License(s): 
+License: 
 -----------
-This software is licensed under a dual license system (MIT or GPL version 2). 
-This means you are free to choose with which of both licenses (MIT or 
-GPL version 2) you want to use this library. See LICENSE.txt file for more.
+See COPYING file for copying permission.
