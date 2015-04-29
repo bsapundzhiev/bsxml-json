@@ -403,7 +403,7 @@ void XmlNode_toFile(struct XmlNode *node, const char *fileName)
         }
         fclose (f);
     } else {
-        printf("error: cant to write %s \n", fileName);
+        printf("error: cannot write to %s \n", fileName);
     }
 }
 /*parser */
@@ -515,7 +515,7 @@ XmlNodeRef XmlParser_parse_file(struct XmlParser *parser,  const String fileName
         root = XmlParser_parse(parser,  buffer);
         free(buffer);
     } else {
-        printf("error: cant read %s \n", fileName);
+        printf("error: cannot read %s \n", fileName);
     }
 
     return root;
