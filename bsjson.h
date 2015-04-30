@@ -68,6 +68,8 @@ JsonNode *JsonNode_Create();
 JsonNode *JsonNode_createChild(JsonNode *node, String name, int type);
 JsonNode *JsonNode_createObject(JsonNode * node, String name);
 JsonNode *JsonNode_createArray(JsonNode * node, String name);
+JsonNode * JsonNode_findChild(JsonNode *node, const String name, int type);
+JsonPair * JsonNode_findPair(JsonNode *node, const String key);
 void JsonNode_setPair(JsonNode *node, const String key, const String value );
 String JsonNode_getPairValue(JsonNode *node, const String key);
 void JsonNode_delete(JsonNode *node);
