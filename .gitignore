@@ -1,6 +1,8 @@
 /Debug/
+/Release/
 /old/
 /test/
+/obj/
 *.suo
 *.vcxproj.user
 *.lib
@@ -11,3 +13,4 @@
 /bsxml
 *.o
 /bsxml-json-test
+*.sdf
