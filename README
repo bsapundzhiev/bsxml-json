@@ -7,7 +7,7 @@ Build:
 NOTE: XML Parser is wrapper around expat library.
 USE_EXPAT=1 in Makefile comment it out for none. 
 
-Build as static libray 
+Build as static libray gnu make
 
 $make static 
 
