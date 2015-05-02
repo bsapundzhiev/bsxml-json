@@ -146,7 +146,7 @@ void JsonNode_deleteTree(JsonNode *root)
     int i;
     if (!root) return;
     for (i=0 ; i < root->m_childs->num; i++) {
-        JsonNode *node = (JsonPair*)cpo_array_get_at(root->m_childs, i);
+        JsonNode *node = (JsonNode*)cpo_array_get_at(root->m_childs, i);
         JsonNode_deleteTree(node);
     }
 
