@@ -107,6 +107,15 @@ String JsonNode_getPairValue(JsonNode *node, const String key)
 	return value;
 }
 
+int JsonNode_getPairValueInt(JsonNode *node, const String key) 
+{
+	String jsonVal = JsonNode_getPairValue(node, key);
+	if(jsonVal) {
+		return atoi(jsonVal);
+	}
+	return 0;
+}
+//TODO: float
 static int JsonNode_comparer(const void *a, const void *b)
 {
     return strcmp(((JsonNode *) a)->m_name, ((JsonNode *) b)->m_name);
@@ -117,6 +126,16 @@ JsonNode * JsonNode_findChild(JsonNode *node, const String name, int type)
     JsonNode tmpNode = { type, name };
     JsonNode *ret = (JsonNode*)cpo_array_bsearch(node->m_childs, &tmpNode, JsonNode_comparer);
     return ret;
+}
+
+int	JsonNode_getChildCount(JsonNode *node) 
+{
+	return node->m_childs->num;
+}
+
+int	JsonNode_getPairCount(JsonNode *node) 
+{
+	return node->m_pairs->num;
 }
 
 void JsonNode_delete(JsonNode *node)
@@ -421,7 +440,6 @@ static int JsonParser_internalParse(struct  ParserInternal *pi, const char* json
         case JSON_TAB:
         case JSON_HEX:	/*TODO:*/
         case JSON_INVALID:
-            //printf("%c", ch);
             if (pi->quote_begin && !pi->is_value) {
                 bsstr_addchr(pi->key, ch);
             } else if (pi->is_value) {
