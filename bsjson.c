@@ -442,7 +442,7 @@ static int JsonParser_internalParse(struct  ParserInternal *pi, const char* json
         case JSON_INVALID:
             if (pi->quote_begin && !pi->is_value) {
                 bsstr_addchr(pi->key, ch);
-            } else if (pi->is_value) {
+            } else if (pi->quote_begin && pi->is_value) {
                 bsstr_addchr(pi->value, ch);
             } else {
                 //printf("[skiped] '%c' [0x%x]\n", ch,ch);
