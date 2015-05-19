@@ -31,7 +31,7 @@ static const char jsonElems [] = {
 
 static char Json_elem(enum eElemType type)
 {
-    return	jsonElems[type];
+    return  jsonElems[type];
 }
 
 static enum eElemType Json_typeOfElem(const char c)
@@ -92,37 +92,37 @@ static int JsonPair_comparer(const void *a, const void *b)
 
 JsonPair * JsonNode_findPair(JsonNode *node, const String key)
 {
-	JsonPair p = { key, NULL };
+    JsonPair p = { key, NULL };
     JsonPair *ret = (JsonPair*)cpo_array_bsearch(node->m_pairs, &p, JsonPair_comparer);
-	return ret;
+    return ret;
 }
 
 String JsonNode_getPairValue(JsonNode *node, const String key)
 {
-	String value  = NULL; 
-	JsonPair *pair = JsonNode_findPair(node,  key);
-	if(pair) {
-		value = pair->value;
-	}
-	return value;
+    String value  = NULL; 
+    JsonPair *pair = JsonNode_findPair(node,  key);
+    if(pair) {
+        value = pair->value;
+    }
+    return value;
 }
 
 int JsonNode_getPairValueInt(JsonNode *node, const String key) 
 {
-	String jsonVal = JsonNode_getPairValue(node, key);
-	if(jsonVal) {
-		return atoi(jsonVal);
-	}
-	return 0;
+    String jsonVal = JsonNode_getPairValue(node, key);
+    if(jsonVal) {
+        return atoi(jsonVal);
+    }
+    return 0;
 }
 
 double JsonNode_getPairValueFloat(JsonNode *node, const String key) 
 {
-	String jsonVal = JsonNode_getPairValue(node, key);
-	if(jsonVal) {
-		return atof(jsonVal);
-	}
-	return 0;
+    String jsonVal = JsonNode_getPairValue(node, key);
+    if(jsonVal) {
+        return atof(jsonVal);
+    }
+    return 0;
 }
 
 static int JsonNode_comparer(const void *a, const void *b)
@@ -137,24 +137,24 @@ JsonNode * JsonNode_findChild(JsonNode *node, const String name, int type)
     return ret;
 }
 
-int	JsonNode_getChildCount(JsonNode *node) 
+int JsonNode_getChildCount(JsonNode *node) 
 {
-	return node->m_childs->num;
+    return node->m_childs->num;
 }
 
-int	JsonNode_getPairCount(JsonNode *node) 
+int JsonNode_getPairCount(JsonNode *node) 
 {
-	return node->m_pairs->num;
+    return node->m_pairs->num;
 }
 
 JsonNode * JsonNode_getChild(JsonNode *node, int index)
 {
-	return (JsonNode *)cpo_array_get_at(node->m_childs, index);
+    return (JsonNode *)cpo_array_get_at(node->m_childs, index);
 }
 
 JsonPair * JsonNode_getPair(JsonNode *node, int index)
 {
-	return (JsonPair *)cpo_array_get_at(node->m_pairs, index);
+    return (JsonPair *)cpo_array_get_at(node->m_pairs, index);
 }
 
 void JsonNode_delete(JsonNode *node)
@@ -362,19 +362,19 @@ static char JsonParser_prev_char(const char *p , int pos)
     return ch;
 }
 
-#define JsonParser_peek_char(p,pos)		*(p + pos + 1)
+#define JsonParser_peek_char(p,pos)     *(p + pos + 1)
 
 #define JsonParser_peekObjBegin(p,pos)\
-	(JsonParser_next_char(p, pos) == Json_elem(JSON_OBJ_B)\
-	|| JsonParser_next_char(p, pos) == Json_elem(JSON_ARR_B))
+    (JsonParser_next_char(p, pos) == Json_elem(JSON_OBJ_B)\
+    || JsonParser_next_char(p, pos) == Json_elem(JSON_ARR_B))
 
 #define JsonParser_peekObjEnd(p, pos)\
-	(JsonParser_next_char(p, pos) == Json_elem(JSON_OBJ_E)\
-	|| JsonParser_next_char(p, pos) == Json_elem(JSON_ARR_E))
+    (JsonParser_next_char(p, pos) == Json_elem(JSON_OBJ_E)\
+    || JsonParser_next_char(p, pos) == Json_elem(JSON_ARR_E))
 
 #define JsonParser_peekEndLine(p,pos)\
-	(JsonParser_peek_char(p,pos) == Json_elem(JSON_CR)\
-	|| JsonParser_peek_char(p, pos) == Json_elem(JSON_LF))
+    (JsonParser_peek_char(p,pos) == Json_elem(JSON_CR)\
+    || JsonParser_peek_char(p, pos) == Json_elem(JSON_LF))
 
 static int JsonParser_internalParse(struct  ParserInternal *pi, const char* json , int len)
 {
@@ -457,7 +457,7 @@ static int JsonParser_internalParse(struct  ParserInternal *pi, const char* json
         case JSON_LEFT:
         case JSON_RIGHT:
         case JSON_TAB:
-        case JSON_HEX:	/*TODO:*/
+        case JSON_HEX:  /*TODO:*/
         case JSON_INVALID:
             if (pi->quote_begin && !pi->is_value) {
                 bsstr_addchr(pi->key, ch);
@@ -532,27 +532,25 @@ JsonNode * JsonParser_parse(struct JsonParser *parser, const char * json)
     if (JsonParser_internalParse(&pi, json, strlen(json)) == JSON_ERR_NONE) {
         root = parser->m_root;
     } else {
-        printf("TODO: parser error:%d @ %d\n", pi.error , pi.line);
+        printf("json parser error:%d @ %d\n", pi.error , pi.line);
     }
-    printf("Parsed lines %d\n",  pi.line);
+    DEBUG_PRINT("Parsed lines %d\n",  pi.line);
     JsonParser_internalDelete(&pi);
     cpo_array_destroy(parser->m_nodeStack);
-    printf("-end-\n");
+    DEBUG_PRINT("-end-\n");
     return root;
 }
 
 static void JsonParser_stripCommentsFromBuffer(char *buff, long size)
 {
-	int i;
-	for(i = 0; i < size; i++)
-	{
-		if((buff[i] == '/' && buff[i+1] == '/') || buff[i] == '#') {
-			while(buff[i] != '\n' && buff[i] != 0){
-				buff[i] = ' ';
-				i++;
-			}
-		}
-	}
+    long i;
+    for(i = 0; i < size; i++) {
+        if((buff[i] == '/' && buff[i+1] == '/') || buff[i] == '#') {
+            while(buff[i] != '\n' && buff[i] != 0){
+                buff[i++] = ' ';
+            }
+        }
+    }
 }
 
 JsonNode * JsonParser_parseFile(struct JsonParser *parser, const char * fileName)
@@ -573,7 +571,7 @@ JsonNode * JsonParser_parseFile(struct JsonParser *parser, const char * fileName
         }
 
         fclose (f);
-		JsonParser_stripCommentsFromBuffer(buffer, length);
+        JsonParser_stripCommentsFromBuffer(buffer, length);
         root = JsonParser_parse(parser,  buffer);
         free(buffer);
     } else {
