@@ -51,7 +51,7 @@ String XmlNode_getTag(struct XmlNode * node)
     return node->m_tag;
 }
 
-int	XmlNode_getChildCount(struct XmlNode * node)
+int XmlNode_getChildCount(struct XmlNode * node)
 {
     return node->m_childs->num;
 }
@@ -466,8 +466,9 @@ static void characterData( void *userData, const char *s, int len )
     }
 }
 
-String XmlParser_getErrorString(struct XmlParser *parser)
+const String XmlParser_getErrorString(struct XmlParser *parser)
 {
+    parser->m_errorString = (char*) XML_ErrorString(XML_GetErrorCode(parser->m_parser));
     return parser->m_errorString;
 }
 
@@ -475,6 +476,7 @@ String XmlParser_getErrorString(struct XmlParser *parser)
 XmlNodeRef XmlParser_parse(XmlParser *parser,  const char * xml )
 {
     XmlNodeRef root = NULL;
+    parser->m_errorString = NULL;
     parser->m_nodeStack= cpo_array_create(XMLTREE_STACKSIZE, sizeof(void*));
     /*expat parser*/
     parser->m_parser = XML_ParserCreate(NULL);
@@ -486,8 +488,8 @@ XmlNodeRef XmlParser_parse(XmlParser *parser,  const char * xml )
         root = parser->m_root;
     } else {
         printf("XML Error: %s at line %ld\n",
-               XML_ErrorString(XML_GetErrorCode(parser->m_parser)),
-               XML_GetCurrentLineNumber(parser->m_parser));
+            XmlParser_getErrorString(parser),
+            XML_GetCurrentLineNumber(parser->m_parser));
     }
 
     XML_ParserFree(parser->m_parser);
