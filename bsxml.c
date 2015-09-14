@@ -139,11 +139,22 @@ static int XmlAttribute_comparer(const void *a, const void *b)
     return strcmp(((XmlAttribute *) a)->key, ((XmlAttribute *) b)->key);
 }
 
-String XmlNode_getAttribute(struct XmlNode *node, const String key )
+XmlAttribute *XmlNode_getAttribute(struct XmlNode *node, const String key)
 {
     XmlAttribute a;
     a.key = key;
-    return (String)cpo_array_bsearch(node->m_attributes, &a, XmlAttribute_comparer);
+    return (XmlAttribute*)cpo_array_bsearch(node->m_attributes, &a, XmlAttribute_comparer);
+}
+
+String XmlNode_getAttributeValue(struct XmlNode *node, const String key) 
+{
+	String value = NULL;
+	XmlAttribute *attr = XmlNode_getAttribute(node, key);
+	if(attr) {
+		value = attr->value;
+	}
+
+	return value;
 }
 
 int XmlNode_haveAttribute(struct XmlNode *node, const String key )

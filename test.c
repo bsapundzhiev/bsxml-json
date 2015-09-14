@@ -97,7 +97,7 @@ struct ctmr t;
  
 static const char xml[] = "<?xml version=\"1.0\"?>\n\
 <A:propfind xmlns:A=\"DAV:\">\n\
-    <A:prop>\n\
+    <A:prop name=\"test\">\n\
         <A:displayname/>\n\
         <A:resourcetype/>\n\
         <A:getcontenttype/>\n\
@@ -187,8 +187,8 @@ void find_test()
             XmlNodeRef child = XmlNode_getChild(root, i);
             if (XmlNode_isTag(child, "A:prop")) {
 
-                char *attr = XmlNode_getAttribute(child, "name");
-                printf("found %s\n", "A:prop");
+                char *attr = XmlNode_getAttributeValue(child, "name");
+                printf("found attr %s -> %s\n", "name", attr);
 
                 if (attr && !strcmp ( attr  , "test") ) {
                     printf("found \n");

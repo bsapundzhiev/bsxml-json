@@ -81,7 +81,9 @@ struct XmlNode {
     //! Get XML Node attributes.
     XmlAttributes * XmlNode_getAttributes(struct XmlNode * node);
     //! Get XML Node attribute for specified key.
-    String XmlNode_getAttribute(struct XmlNode * node, const String key );
+    XmlAttribute * XmlNode_getAttribute(struct XmlNode * node, const String key );
+    // Get string value 
+    String XmlNode_getAttributeValue(struct XmlNode *node, const String key);
     //! Check if attributes with specified key exist.
     int XmlNode_haveAttribute(struct XmlNode * node, const String key );
     //! Set new XML Node attribute (or override attribute with same key).
