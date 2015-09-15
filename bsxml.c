@@ -14,14 +14,15 @@
 #include <string.h>
 #include <assert.h>
 #include <ctype.h>
+#include <errno.h>
 #include "bsstr.h"
 #include "bsxml.h"
 /* initial size */
-#define XMLTREE_CHILDSIZE	8
-#define XMLTREE_ATTRSIZE 	4
-#define XMLTREE_STACKSIZE 	32
+#define XMLTREE_CHILDSIZE   8
+#define XMLTREE_ATTRSIZE    4
+#define XMLTREE_STACKSIZE   32
 
-#define ENC_TYPE_UTF8 	"UTF-8"
+#define ENC_TYPE_UTF8   "UTF-8"
 
 XmlNode * XmlNode_Create(const String tag)
 {
@@ -148,13 +149,13 @@ XmlAttribute *XmlNode_getAttribute(struct XmlNode *node, const String key)
 
 String XmlNode_getAttributeValue(struct XmlNode *node, const String key) 
 {
-	String value = NULL;
-	XmlAttribute *attr = XmlNode_getAttribute(node, key);
-	if(attr) {
-		value = attr->value;
-	}
+    String value = NULL;
+    XmlAttribute *attr = XmlNode_getAttribute(node, key);
+    if(attr) {
+        value = attr->value;
+    }
 
-	return value;
+    return value;
 }
 
 int XmlNode_haveAttribute(struct XmlNode *node, const String key )
@@ -479,7 +480,6 @@ static void characterData( void *userData, const char *s, int len )
 
 const String XmlParser_getErrorString(struct XmlParser *parser)
 {
-    parser->m_errorString = (char*) XML_ErrorString(XML_GetErrorCode(parser->m_parser));
     return parser->m_errorString;
 }
 
@@ -498,6 +498,7 @@ XmlNodeRef XmlParser_parse(XmlParser *parser,  const char * xml )
     if (XML_Parse(parser->m_parser, xml, strlen(xml), XML_TRUE)) {
         root = parser->m_root;
     } else {
+        parser->m_errorString = (char*) XML_ErrorString(XML_GetErrorCode(parser->m_parser));
         printf("XML Error: %s at line %ld\n",
             XmlParser_getErrorString(parser),
             XML_GetCurrentLineNumber(parser->m_parser));
@@ -528,6 +529,7 @@ XmlNodeRef XmlParser_parse_file(struct XmlParser *parser,  const String fileName
         root = XmlParser_parse(parser,  buffer);
         free(buffer);
     } else {
+        parser->m_errorString = strerror(errno);
         printf("error: cannot read %s \n", fileName);
     }
 

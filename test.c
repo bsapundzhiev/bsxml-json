@@ -209,13 +209,15 @@ void file_test(int argc, char **argv)
 
     if (argc > 1) {
         param = argv[argc-1];
-        printf("parse file %s\n", param);
     }
     CLK_ON(&t);
+    printf("parse file %s\n", param);
     root = XmlParser_parse_file(&xmlParser, param);
 
     if (root) {
         printXml( root );
+    } else {
+        printf("Err: %s\n", XmlParser_getErrorString(&xmlParser));
     }
 
     XmlNode_deleteTree(root);
@@ -231,15 +233,19 @@ void printJson( JsonNode *node )
 
 void json_parser_test()
 {
+    String param = "test/test2.json";
     JsonParser parser;
     JsonNode *root;
     CLK_ON(&t);
 
     //root = JsonParser_parse(&parser, json2);
     //root = JsonParser_parse(&parser, json);
-    root = JsonParser_parseFile(&parser, "test/test2.json");
+    printf("parse file %s\n", param);
+    root = JsonParser_parseFile(&parser, param);
     if (root) {
         printJson( root );
+    } else {
+        printf("Err: %s\n", JsonParser_getErrorString(&parser));
     }
 
     JsonNode_deleteTree(root);

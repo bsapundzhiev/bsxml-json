@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <errno.h>
 #include "bsjson.h"
 
 #define JSON_STACK_SIZE 32
@@ -242,6 +243,12 @@ String JsonNode_getJSON(JsonNode *node)
 /* Parse JSON                                                                   */
 /********************************************************************************/
 enum {JSON_ERR_NONE, JSON_ERR_QUOTE, JSON_ERR_COMMA, JSNON_ERR_NOTOBJ, JSON_ERR_SYN};
+const char *jsonParser_errlist[] = {
+    "Unknown error", "Missing or unexpected quote", 
+    "Missing or unexpected comma", "Unexpected object end", 
+    "Unexpected syntax"
+};
+
 struct  ParserInternal { /*Jsonlexer*/
     int error;
     int line;
@@ -519,6 +526,11 @@ static void JsonParser_elemData(struct JsonParser *parser, const String key,  co
     }
 }
 
+String JsonParser_getErrorString(JsonParser *parser)
+{
+    return parser->m_errorString;
+}
+
 JsonNode * JsonParser_parse(struct JsonParser *parser, const char * json)
 {
     JsonNode * root = NULL;
@@ -532,9 +544,10 @@ JsonNode * JsonParser_parse(struct JsonParser *parser, const char * json)
     if (JsonParser_internalParse(&pi, json, strlen(json)) == JSON_ERR_NONE) {
         root = parser->m_root;
     } else {
-        printf("json parser error:%d @ %d\n", pi.error , pi.line);
+        parser->m_errorString = (char*)jsonParser_errlist[pi.error];
+        printf("json parser error:%s @ %d\n", parser->m_errorString, pi.line);
     }
-    DEBUG_PRINT("Parsed lines %d\n",  pi.line);
+    DEBUG_PRINT("Parsed lines %d\n", pi.line);
     JsonParser_internalDelete(&pi);
     cpo_array_destroy(parser->m_nodeStack);
     DEBUG_PRINT("-end-\n");
@@ -575,6 +588,7 @@ JsonNode * JsonParser_parseFile(struct JsonParser *parser, const char * fileName
         root = JsonParser_parse(parser,  buffer);
         free(buffer);
     } else {
+        parser->m_errorString = strerror(errno);
         printf("error: cant read %s \n", fileName);
     }
 
