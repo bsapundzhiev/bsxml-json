@@ -432,21 +432,18 @@ static int JsonParser_internalParse(struct  ParserInternal *pi, const char* json
             if (!pi->quote_begin) {
                 pi->is_value = 1;
             } else {
-                /* quote in string */
-                bsstr_addchr(pi->key, Json_elem(JSON_COLON));
+                /* colon in value */
+                bsstr *data = (!pi->is_value) ? pi->key : pi->value;
+                bsstr_addchr(data, Json_elem(JSON_COLON));
             }
             break;
         case JSON_COMMA:
             if (JsonParser_peekEndLine(p,i) || JsonParser_next_char(p,i) == Json_elem(JSON_QUOTE)) {
                 JsonParser_internalData(pi);
             } else {
-                /* comma in string */
-                if (pi->is_value) {
-                    bsstr_addchr(pi->value, Json_elem(JSON_COMMA));
-                } else {
-                    /* XXX: comma in key? */
-                    pi->error = JSON_ERR_COMMA;
-                }
+                /* comma in value */
+                bsstr *data = (!pi->is_value) ? pi->key : pi->value;
+                bsstr_addchr(data, Json_elem(JSON_COMMA));
             }
             break;
 
