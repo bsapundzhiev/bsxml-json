@@ -536,6 +536,7 @@ JsonNode * JsonParser_parse(struct JsonParser *parser, const char * json)
     JsonNode * root = NULL;
     struct ParserInternal pi;
     pi.parser = parser;
+    parser->m_errorString = NULL;
     JsonParser_internalCreate(&pi);
     pi.startElem = JsonParser_startElem;
     pi.endElem = JsonParser_endElem;
