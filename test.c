@@ -129,6 +129,10 @@ static const char json [] =
         {\n\
             \"type\": \"fax\",\n\
 			\"number\": \"646 555-4567\"\n\
+        },\n\
+        {\n\
+            \"type\": \"phone\",\n\
+            \"number\": \"646 555-0000\"\n\
         }\n\
     ]\n\
 }\n";
@@ -144,9 +148,16 @@ static const char json2 [] =
         		\"configGlossary:installationAt\": \"Philadelphia, PA\"\n\
         	},\n\
         },\n\
+        { \"servlet-name1\": \"cofaxCDS1\",\n\
+          \"servlet-name2\": \"cofaxCDS2\",\n\
+            \"init-param1\": {\n\
+                \"configGlossary1:installationAt1\": \"Philadelphia1, PA1\",\n\
+                \"configGlossary1:installationAt2\": \"Philadelphia1, PA2\"\n\
+            },\n\
+        },\n\
 		\"GML\",\n\
 		\"XML\"\n\
-	]\n\
+	], \"test\":{ \"x\":\"x1\"}\n\
 }\n";
 
 void printXml( XmlNodeRef node )
@@ -252,6 +263,24 @@ void json_parser_test()
     CLK_OFF(&t);
 }
 
+void json_parser_test2()
+{
+    JsonParser parser;
+    JsonNode *root;
+    CLK_ON(&t);
+
+    root = JsonParser_parse(&parser, json2);
+    //root = JsonParser_parse(&parser, json);
+    if (root) {
+        printJson( root );
+    } else {
+        printf("Err: %s\n", JsonParser_getErrorString(&parser));
+    }
+
+    JsonNode_deleteTree(root);
+    CLK_OFF(&t);
+}
+
 void json_create_test ()
 {
     JsonNode *root = JsonNode_Create();
@@ -283,13 +312,13 @@ void json_create_test ()
 
 int main(int argc, char **argv)
 {
-    file_test(argc,argv);
+    /*file_test(argc,argv);
     create_test ();
     find_test();
-    /*test json */
-    json_create_test();
-    json_parser_test();
-
+    //test json */
+    //json_create_test();
+    //json_parser_test();
+    json_parser_test2();
 #ifdef _WIN32
     _CrtDumpMemoryLeaks();
     system("pause");
