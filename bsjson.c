@@ -197,7 +197,7 @@ void JsonNode_deleteTree(JsonNode *root)
     }
 }
 
-String JsonNode_getJSON_req(JsonNode *node)
+String JsonNode_getJSON(JsonNode *node)
 {
     int i, nPairs, nChilds;
     String JSON = NULL;
@@ -240,9 +240,9 @@ String JsonNode_getJSON_req(JsonNode *node)
     return JSON;
 }
 
-String JsonNode_getJSON(JsonNode *root)
+String JsonNode_getJSON_NR(JsonNode *root)
 {
-    int i, nPairs, nChilds;
+    int i, nPairs, nChilds, currentDepth = 0;
     String JSON = NULL;
     bsstr *buff = bsstr_create("");
     void * ptr;
@@ -250,37 +250,33 @@ String JsonNode_getJSON(JsonNode *root)
     cpo_array_t *nodeStack = cpo_array_create(JSON_STACK_SIZE , sizeof(void*));
     cpo_array_t *nodeVisited = cpo_array_create(JSON_STACK_SIZE, sizeof(void*));
 
-    ptr = stack_push(nodeStack);
+    ptr = stack_push_back(nodeStack);
     if (ptr != NULL) {
         ARR_VAL(ptr) = ARR_VAL2PTR(root);
     }
 
-    while(nodeStack->num > 0) {
+    while (nodeStack->num > 0) {
 
-        ptr = stack_pop(nodeStack);
+        ptr = stack_pop_back(nodeStack);
         JsonNode *node = (JsonNode*) ARR_VAL(ptr);
 
-        printf("@@@@@@@ name: %s\n", node->m_name);
-
-        if (!isNullorEmpty(node->m_name)) {
-            bsstr_printf(buff, "\"%s\":", node->m_name);
-        }
-       
         nPairs = JsonNode_getPairCount(node);
         nChilds = JsonNode_getChildCount(node);
 
         ptr = stack_push_back(nodeVisited);
-
         if (ptr != NULL) {
-            printf("ADDDD ---> %s(%d)\n", node->m_name, node->m_type );
             ARR_VAL(ptr) = ARR_VAL2PTR(node);
+        }
+        
+        if (!isNullorEmpty(node->m_name)) {
+            bsstr_printf(buff, "\"%s\":", node->m_name);
         }
 
         bsstr_printf(buff, "%s\n",  JSON_IS_OBJ(node) ? "{" : "[");
         
-        for (i=0; i < nPairs; i++ ) {
+        for (i = 0; i < nPairs; i++ ) {
             JsonPair *pair = JsonNode_getPair(node, i);
-
+        
             if (JSON_IS_ARRAY(node)) {
                 bsstr_printf(buff, "\"%s\"", pair->key);
             } else {
@@ -290,34 +286,71 @@ String JsonNode_getJSON(JsonNode *root)
             bsstr_printf(buff, "%s\n", (i < nPairs -1 || nChilds > 0) ? "," : "");
         }
 
-
-        for (i = 0; i < nChilds; i++) {
-            JsonNode* child = JsonNode_getChild(node, i);
-            ptr = stack_push(nodeStack);
-            if (ptr != NULL) {
-                ARR_VAL(ptr) = ARR_VAL2PTR(child);
+        if (nChilds > 0) {
+            currentDepth = 0;
+            for (i = 0; i < nChilds; i++) {
+                JsonNode* child = JsonNode_getChild(node, i);
+                ptr = stack_push_back(nodeStack);
+                if (ptr != NULL) {
+                    ARR_VAL(ptr) = ARR_VAL2PTR(child);
+                }
             }
-        }
+        } else {
 
-       	if(nChilds == 0) {
-            
-            while(nodeVisited->num > nodeStack->num ) {
-				ptr = stack_pop_back(nodeVisited);
-            	JsonNode *visited = (JsonNode*) ARR_VAL(ptr);
-                printf("nodeVisited %d nodeStack %d POP %s(%d) == current node %s(%d)\n", 
-                	nodeVisited->num, nodeStack->num, visited->m_name, visited->m_type, node->m_name, node->m_type);	
-            	bsstr_printf(buff, "%s\n",  JSON_IS_OBJ(visited) ? "}" : "]");
+            while (nodeVisited->num > 0) {
+                ptr = stack_back(nodeVisited);
+                JsonNode *visited = (JsonNode*) ARR_VAL(ptr);
+                int nCount = JsonNode_getChildCount(visited);
+
+                if (node->m_parent == visited->m_parent) {
+                    currentDepth++; 
+                }
                 
+                if (nCount > 1) {
+                    if(node->m_parent == visited && currentDepth == nCount) {
+                        currentDepth = 0;
+                        bsstr_printf(buff, "%s\n",  JSON_IS_OBJ(visited) ? "}" : "]");
+                        stack_pop_back(nodeVisited);
+                        
+                        while(nodeVisited->num > nodeStack->num) {
+                            ptr = stack_pop_back(nodeVisited);
+                            JsonNode *n = (JsonNode*) ARR_VAL(ptr);
+                            bsstr_printf(buff, "%s\n",  JSON_IS_OBJ(n) ? "}" : "]");
+                        }
+                    }
+                    break;
+                }
+                bsstr_printf(buff, "%s\n",  JSON_IS_OBJ(visited) ? "}" : "]");
+                stack_pop_back(nodeVisited);
             }
             
-            if(nodeVisited->num > 0 ) {
-            	bsstr_printf(buff, ",\n");
+            if (nodeStack->num > 0) {
+                ptr = stack_back(nodeStack);
+                JsonNode *next = (JsonNode*) ARR_VAL(ptr);
+                if (JsonNode_getChildCount(next) == 0 && next->m_parent == root) {
+                    ptr = stack_back(nodeVisited);
+                    JsonNode *visited = (JsonNode*) ARR_VAL(ptr);
+                    if(JSON_IS_ARRAY(visited)) { 
+                        bsstr_printf(buff, "%s\n", "]");
+                        stack_pop_back(nodeVisited);
+                    }
+                }
             }
-        	
+
+            if (nodeStack->num > 0 ) {
+                bsstr_printf(buff, ",\n");
+            }
         }
     }
 
-    printf("nodeVisited %d\n", nodeVisited->num );
+    while(nodeVisited->num > nodeStack->num) {
+        ptr = stack_pop_back(nodeVisited);
+        JsonNode *n = (JsonNode*) ARR_VAL(ptr);
+        bsstr_printf(buff, "%s\n",  JSON_IS_OBJ(n) ? "}" : "]");
+    }
+
+    cpo_array_destroy(nodeStack);
+    cpo_array_destroy(nodeVisited);
     JSON = bsstr_release(buff);
     return JSON;
 }

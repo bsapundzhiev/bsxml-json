@@ -1,15 +1,22 @@
 Fairly simple and portable XML DOM and JSON implementation in C 
 You can do both parsing and creating DOM and JSON type objects.
 
+JSON implementation is tested on ATmega328P with 2KB SRAM
+
 Build:
 ------
 
 NOTE: XML Parser is wrapper around expat library.
 USE_EXPAT=1 in Makefile comment it out for none. 
 
-Build as static libray gnu make
+Build as static libray with 'gnu make':
 
-$make static 
+	$make static 
+
+Arduino sketch(json only):
+
+	$make arduino 
+	open created sketch folder with arduino IDE
 
 License: 
 -----------

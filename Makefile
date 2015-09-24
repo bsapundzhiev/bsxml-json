@@ -24,3 +24,6 @@ clean:
 	
 format:
 	astyle --style=stroustrup -s4 $(SOURCES)
+arduino:
+	mkdir -p bsjson
+	cp -p array.c array.h bsstr.c bsstr.h bsjson.c bsjson.h bsjson.ino bsjson

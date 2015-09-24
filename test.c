@@ -148,16 +148,22 @@ static const char json2 [] =
         		\"configGlossary:installationAt\": \"Philadelphia, PA\"\n\
         	},\n\
         },\n\
-        { \"servlet-name1\": \"cofaxCDS1\",\n\
+        {\"servlet-name0\": \"cofaxCDS0\",\n\
+         \"servlet-name1\": \"cofaxCDS1\",\n\
           \"servlet-name2\": \"cofaxCDS2\",\n\
             \"init-param1\": {\n\
                 \"configGlossary1:installationAt1\": \"Philadelphia1, PA1\",\n\
-                \"configGlossary1:installationAt2\": \"Philadelphia1, PA2\"\n\
+                \"configGlossary1:installationAt2\": \"Philadelphia1, PA2\",\n\
+                \"parm2\":{\"p1\":\"pp1\"},\n\
+                \"arr2\":[{\"x\":\"x\"},\"a2\"]\n\
             },\n\
         },\n\
 		\"GML\",\n\
 		\"XML\"\n\
-	], \"test\":{ \"x\":\"x1\"}\n\
+	], \n\
+    \"x\":{\"test\":{ \"x0\":\"x0\"},\n\
+    \"test1\":{ \"x1\":\"x1\"},\n\
+    \"test2\":{ \"x2\":\"x2\"}}\n\
 }\n";
 
 void printXml( XmlNodeRef node )
@@ -237,7 +243,7 @@ void file_test(int argc, char **argv)
 
 void printJson( JsonNode *node )
 {
-    String str = JsonNode_getJSON(node);
+    String str = JsonNode_getJSON_NR(node);
     printf("%s", str);
     free(str);
 }

@@ -49,7 +49,7 @@ static int cpo_array_preallocate(cpo_array_t *a, int elements)
     newv = malloc(newmax * a->elem_size);
 
     if (newv == NULL)
-        return ENOMEM;
+        return -1;
 
     memcpy(newv, a->v, a->num * a->elem_size);
 
