@@ -19,8 +19,10 @@
 #define strcasecmp _stricmp
 #undef strdup
 #define strdup  _strdup
+#if defined(_MSC_VER) && _MSC_VER < 1900
 #define snprintf _snprintf
-#endif 
+#endif
+#endif
 
 enum { XML_NOK = 0, XML_OK };
 enum { NODE_NONE, NODE_ROOT, NODE_CHILD };
