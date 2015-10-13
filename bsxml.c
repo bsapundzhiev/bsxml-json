@@ -512,7 +512,7 @@ XmlNodeRef XmlParser_parse(XmlParser *parser,  const char * xml )
 XmlNodeRef XmlParser_parse_file(struct XmlParser *parser,  const String fileName )
 {
     char * buffer = 0;
-    long length =0;
+    long length = 0, read = 0;
     XmlNodeRef root = NULL;
     FILE *f = fopen (fileName, "rb");
 
@@ -522,11 +522,15 @@ XmlNodeRef XmlParser_parse_file(struct XmlParser *parser,  const String fileName
         fseek (f, 0, SEEK_SET);
         buffer = (char*) malloc (length + 1);
         if (buffer) {
-            fread (buffer, sizeof(char), length, f);
+            read = fread (buffer, sizeof(char), length, f);
             buffer[length] = '\0';
         }
         fclose (f);
-        root = XmlParser_parse(parser,  buffer);
+        if (read > 0) {
+            root = XmlParser_parse(parser,  buffer);
+        } else {
+            parser->m_errorString = strerror(errno);
+        }
         free(buffer);
     } else {
         parser->m_errorString = strerror(errno);
