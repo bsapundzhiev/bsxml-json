@@ -523,7 +523,7 @@ XmlNodeRef XmlParser_parse_file(struct XmlParser *parser,  const String fileName
         buffer = (char*) malloc (length + 1);
         if (buffer) {
             read = fread (buffer, sizeof(char), length, f);
-            buffer[length] = '\0';
+            buffer[read] = '\0';
         }
         fclose (f);
         if (read > 0) {
