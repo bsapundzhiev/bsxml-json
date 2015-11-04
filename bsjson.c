@@ -574,7 +574,7 @@ JsonNode * JsonParser_parseFile(struct JsonParser *parser, const char * fileName
     char * buffer = 0;
     long length = 0, read = 0;
     JsonNode * root = NULL;
-    FILE *f = fopen (fileName, "r");
+    FILE *f = fopen (fileName, "rb");
 
     if (f) {
         fseek (f, 0, SEEK_END);
@@ -586,7 +586,7 @@ JsonNode * JsonParser_parseFile(struct JsonParser *parser, const char * fileName
             buffer[read] = '\0';
         }
         fclose (f);
-        if (read > 0) {
+        if (read == length) {
             JsonParser_stripCommentsFromBuffer(buffer, length);
             root = JsonParser_parse(parser,  buffer);
         } else {

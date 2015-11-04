@@ -526,7 +526,7 @@ XmlNodeRef XmlParser_parse_file(struct XmlParser *parser,  const String fileName
             buffer[read] = '\0';
         }
         fclose (f);
-        if (read > 0) {
+        if (read == length) {
             root = XmlParser_parse(parser,  buffer);
         } else {
             parser->m_errorString = strerror(errno);
