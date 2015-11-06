@@ -413,14 +413,14 @@ static int JsonParser_internalParse(struct  ParserInternal *pi, const char* json
             break;
 
         case JSON_QUOTE:
-			/* escaped quote in value */
-			if(JsonParser_prev_char(p, i) == Json_elem(JSON_LEFT)) {	
-				bsstr *data = (!pi->is_value) ? pi->key : pi->value;
+            /* escaped quote in value */
+            if(JsonParser_prev_char(p, i) == Json_elem(JSON_LEFT)) {    
+                bsstr *data = (!pi->is_value) ? pi->key : pi->value;
                 bsstr_addchr(data, Json_elem(JSON_QUOTE));
-				break;
-			}
+                break;
+            }
 
-			pi->quote_begin = !pi->quote_begin;
+            pi->quote_begin = !pi->quote_begin;
             if(pi->quote_begin) {
                 char prev = JsonParser_prev_char(p, i);
                 if(prev != Json_elem(JSON_COMMA) && prev !=  Json_elem(JSON_COLON)
