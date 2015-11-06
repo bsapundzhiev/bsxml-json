@@ -14,6 +14,7 @@
 #include <string.h>
 #include <assert.h>
 #include <errno.h>
+#include "bsstr.h"
 #include "bsjson.h"
 
 #define JSON_STACK_SIZE 32
@@ -528,12 +529,18 @@ static int JsonParser_internalParse(struct  ParserInternal *pi, const char* json
             break;
 
         case JSON_QUOTE:
-            pi->quote_begin = !pi->quote_begin;
+            /* escaped quote in value */
+            if(JsonParser_prev_char(p, i) == Json_elem(JSON_LEFT)) {    
+                bsstr *data = (!pi->is_value) ? pi->key : pi->value;
+                bsstr_addchr(data, Json_elem(JSON_QUOTE));
+                break;
+            }
 
-            if( pi->quote_begin) {
+            pi->quote_begin = !pi->quote_begin;
+            if(pi->quote_begin) {
                 char prev = JsonParser_prev_char(p, i);
                 if(prev != Json_elem(JSON_COMMA) && prev !=  Json_elem(JSON_COLON)
-                        && prev != Json_elem(JSON_OBJ_B) &&  prev != Json_elem(JSON_ARR_B) ) {
+                        && prev != Json_elem(JSON_OBJ_B) &&  prev != Json_elem(JSON_ARR_B)) {
                     pi->error = JSON_ERR_SYN;
                     break;
                 }
@@ -687,9 +694,9 @@ static void JsonParser_stripCommentsFromBuffer(char *buff, long size)
 JsonNode * JsonParser_parseFile(struct JsonParser *parser, const char * fileName)
 {
     char * buffer = 0;
-    long length =0;
+    long length = 0, read = 0;
     JsonNode * root = NULL;
-    FILE *f = fopen (fileName, "r");
+    FILE *f = fopen (fileName, "rb");
 
     if (f) {
         fseek (f, 0, SEEK_END);
@@ -697,13 +704,16 @@ JsonNode * JsonParser_parseFile(struct JsonParser *parser, const char * fileName
         fseek (f, 0, SEEK_SET);
         buffer = (char*) malloc (length + 1);
         if (buffer) {
-            fread (buffer, sizeof(char), length, f);
-            buffer[length] = '\0';
+            read = fread (buffer, sizeof(char), length, f);
+            buffer[read] = '\0';
         }
-
         fclose (f);
-        JsonParser_stripCommentsFromBuffer(buffer, length);
-        root = JsonParser_parse(parser,  buffer);
+        if (read == length) {
+            JsonParser_stripCommentsFromBuffer(buffer, length);
+            root = JsonParser_parse(parser,  buffer);
+        } else {
+            parser->m_errorString = strerror(errno);
+        }
         free(buffer);
     } else {
         parser->m_errorString = strerror(errno);
