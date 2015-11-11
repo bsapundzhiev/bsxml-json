@@ -1,146 +1,122 @@
-/* String utility
- *
- * Copyright (C) 2014 Borislav Sapundzhiev
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 2 of the License, or (at
- * your option) any later version.
- *
- */
- 
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
+#include <stdlib.h>
 #include <stdarg.h>
-#include <assert.h>
 #include "bsstr.h"
 
-struct bsstr {
-    char *buf;
-    int length;
-    int allocated;
+struct bsstr
+{
+    char *string;
+    size_t length;
+    size_t capacity;
 };
 
-#define ALLOC_BLOCK 64
+#define STRING_BLOCK_SIZE 32
+
+static bsstr * bsstr_realloc(bsstr *buf, size_t len);
+static bsstr * bsstr_init(bsstr* str);
+
+void bsstr_add(bsstr* str, const char* string)
+{
+    size_t len = strlen(string);
+    bsstr_realloc(str, len);
+    strcpy(str->string + str->length, string);
+    str->length += len;
+    str->string[str->length] = '\0';
+}
 
 bsstr *bsstr_create(const char *data)
 {
     bsstr *str = (bsstr *)malloc(sizeof (bsstr));
     if (!str) return NULL;
-    if (data != NULL) {
-        int len = strlen(data);
-        str->allocated = (ALLOC_BLOCK > len) ? ALLOC_BLOCK : (len+1);
-        str->buf = calloc(str->allocated, 1);
-        if (str->buf) {
-            str->length = len;
-            strncpy(str->buf, data, len+1);
-        }
-    } else {
-        str->allocated = ALLOC_BLOCK;
-        str->buf = calloc(str->allocated, 1);
-        str->length = 0;
-    }
 
+    bsstr_init(str);
+    if(data) {
+       bsstr_add(str, data);
+    }
     return str;
 }
 
-static int bsstr_realloc(bsstr *str , int len)
+bsstr *bsstr_init(bsstr* str)
 {
-    if (str->allocated <= len) {
-        char *new;
-        int new_size = str->allocated * 2;
+    str->string = NULL;
+    str->length = 0;
+    str->capacity = STRING_BLOCK_SIZE;
+    str->string = malloc(str->capacity);
+    return str;
+}
 
-        if (new_size < len)
-            new_size += len;
+bsstr * bsstr_realloc(bsstr *buf, size_t len)
+{
+    static const size_t mask = ~(STRING_BLOCK_SIZE - 1);
+    size_t newlen = buf->length + len + 1; /* add 1 for NUL */
 
-        str->allocated += len + 1;
-        new = realloc(str->buf , new_size +1);
-        if (new) {
-            str->buf = new;
-            str->allocated = new_size;
+    if(newlen > buf->capacity)
+    {
+        void *new_mem = NULL;
+        buf->capacity = (newlen + (STRING_BLOCK_SIZE - 1)) & mask;
+        buf->string = (char *)realloc(buf->string, buf->capacity);
+        /*new_mem  = malloc(buf->capacity);
+        if (new_mem) {
+            memcpy(new_mem, buf->string, buf->capacity);
+            free(buf->string);
         }
-        return str->allocated;
+        buf->string = new_mem;*/
     }
 
-    return 0;
+    return buf;
 }
 
-void bsstr_delete(bsstr *str)
+/*based on snprintf man */
+void bsstr_printf(bsstr* buf, char* fmt, ...)
 {
-    free(str->buf);
-    free(str);
-}
-
-void bsstr_printf(bsstr* str, char* format, ...)
-{
+    int n, size = STRING_BLOCK_SIZE;  
     va_list ap;
-    int n, size = 100;
-    int end = str->length;
+    int end = buf->length;
+    bsstr *p = bsstr_realloc(buf, size);
+    if (p == NULL) {
+        return;
+    }
     while (1) {
-        bsstr_realloc(str, end + size + 1);
-        va_start(ap, format);
-        n = vsnprintf(str->buf + end, size, format, ap);
+        va_start(ap, fmt);
+        n = vsnprintf(buf->string + end, size, fmt, ap);
         va_end(ap);
         if (n > -1 && n < size) {
-            str->length = end + n;
+            buf->length = end + n;
             return;
         }
-        size *= 2;
+        if (n > -1)     
+            size = n+1; 
+        else          
+            size *= 2; 
+        if((p = bsstr_realloc(buf, size)) == NULL ) {
+            return;
+        }
     }
-}
-
-void bsstr_add(bsstr* str, const char* string)
-{
-    int len = strlen(string);
-    bsstr_add_size(str, string, len);
 }
 
 void bsstr_addchr(bsstr* str, char ch)
 {
-    bsstr_realloc(str, str->length + 1);
-    str->buf[str->length] = ch;
-    str->length++;
-    str->buf[str->length] = '\0';
+    char s[] = {ch,'\0'}; 
+    bsstr_add(str, s);
 }
 
-void bsstr_add_size(bsstr* str, const char* string, int len)
+void bsstr_delete(bsstr *str)
 {
-    int end = str->length;
-    bsstr_realloc(str, str->length + len+1);
-    strncpy(str->buf + end, string, len+1);
-    str->length += len;
-    str->buf[str->length] = '\0';
+    free(str->string);
+    free(str);
 }
 
-char *bsstr_get_copy(bsstr* str)
+char *bsstr_release(bsstr* str)
 {
-    char* result = malloc(str->allocated +1);
-    if (!result) return NULL;
-    strncpy(result, str->buf, str->length);
-    result[str->length] = '\0';
-    return result;
-}
-
-char* bsstr_get_bufref(bsstr* str)
-{
-    return str->buf;
-}
-
-char *bsstr_get_buf(bsstr* str)
-{
-    char* result = str->buf;
-    str->allocated = ALLOC_BLOCK;
-    str->buf = calloc(str->allocated, 1);
-    str->length = 0;
-    return result;
-}
-
-char* bsstr_release(bsstr* str)
-{
-    char* result = str->buf;
+    char *result = str->string;
     free(str);
     return result;
+}
+
+char *bsstr_get_bufref(bsstr* str)
+{
+    return str->string;
 }
 
 int bsstr_length(bsstr *str)
@@ -151,5 +127,12 @@ int bsstr_length(bsstr *str)
 void bsstr_clear(bsstr* str)
 {
     str->length = 0;
-    str->buf[0] = '\0';
+    str->string[0] = '\0';
+}
+
+char *bsstr_get_buf(bsstr* str)
+{
+    char *result = str->string;
+    bsstr_init(str);
+    return result;
 }
