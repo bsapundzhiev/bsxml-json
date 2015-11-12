@@ -1,6 +1,6 @@
 /* String utility
  *
- * Copyright (C) 2014 Borislav Sapundzhiev
+ * Copyright (C) 2015 Borislav Sapundzhiev
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include "bsstr.h"
+#include "mem.h"
 
 struct bsstr
 {
@@ -29,7 +30,7 @@ static bsstr * bsstr_init(bsstr* str);
 
 bsstr *bsstr_create(const char *data)
 {
-    bsstr *str = (bsstr *)malloc(sizeof (bsstr));
+    bsstr *str = (bsstr *)bs_alloc(sizeof (bsstr));
     if (!str) return NULL;
 
     bsstr_init(str);
@@ -44,7 +45,7 @@ bsstr *bsstr_init(bsstr* str)
     str->string = NULL;
     str->length = 0;
     str->capacity = STRING_BLOCK_SIZE;
-    str->string = malloc(str->capacity);
+    str->string = bs_alloc(str->capacity);
     return str;
 }
 
@@ -57,10 +58,10 @@ bsstr * bsstr_realloc(bsstr *buf, size_t len)
         void *new_mem = NULL;
         buf->capacity = (newlen + (STRING_BLOCK_SIZE - 1)) & mask;
         //buf->string = (char *)realloc(buf->string, buf->capacity);
-        new_mem  = malloc(buf->capacity);
+        new_mem  = bs_alloc(buf->capacity);
         if (!new_mem) return NULL;
         memmove(new_mem, buf->string, buf->length);
-        free(buf->string);
+        bs_free(buf->string);
         buf->string = new_mem;
     }
     return buf;
@@ -112,14 +113,14 @@ void bsstr_addchr(bsstr* str, char ch)
 
 void bsstr_delete(bsstr *str)
 {
-    free(str->string);
-    free(str);
+    bs_free(str->string);
+    bs_free(str);
 }
 
 char *bsstr_release(bsstr* str)
 {
     char *result = str->string;
-    free(str);
+    bs_free(str);
     return result;
 }
 

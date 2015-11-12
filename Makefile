@@ -2,7 +2,7 @@ USE_EXPAT=1
 CC=gcc
 CFLAGS=-c -g -Wall 
 LDFLAGS=-lexpat -L .
-SOURCES=array.c bsxml.c bsjson.c bsstr.c test.c
+SOURCES=array.c bsxml.c bsjson.c bsstr.c mem.c test.c
 OBJECTS=$(SOURCES:.c=.o)
 EXECUTABLE=bsxml-json-test
 OUTPUTFILE=libbsxmljson.a
