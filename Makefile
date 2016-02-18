@@ -1,23 +1,36 @@
-USE_EXPAT=1
+#
+# Makefile
+# 
 CC=gcc
 CFLAGS=-c -g -Wall 
 LDFLAGS=-lexpat -L .
-SOURCES=array.c bsxml.c bsjson.c bsstr.c test.c
+USE_EXPAT=1
+
+SOURCES=array.c bsjson.c bsstr.c test.c
+SOURCES_LIB=array.c bsjson.c bsstr.c
+ifdef USE_EXPAT
+SOURCES +=bsxml.c
+SOURCES_LIB +=bsxml.c 
+endif
+
 OBJECTS=$(SOURCES:.c=.o)
+OBJECTS_LIB=$(SOURCES_LIB:.c=.o)
 EXECUTABLE=bsxml-json-test
 OUTPUTFILE=libbsxmljson.a
 
-all: $(SOURCES) $(EXECUTABLE)
-	
-$(EXECUTABLE): $(OBJECTS) 
-	$(CC) $(OBJECTS) $(LDFLAGS) -o $@ 
+all: $(SOURCES) $(OBJECTS)
+	$(CC) $(OBJECTS) $(LDFLAGS) -o $(EXECUTABLE) 
+
+#	$(CC) $(OBJECTS) $(LDFLAGS) -o $@ 
 
 .c.o:
 	$(CC) $(CFLAGS) $< -o $@
 	
-static: all
-	ar ru $(OUTPUTFILE) $(OBJECTS)
+
+lib: $(SOURCES_LIB) $(OBJECTS_LIB) 
+	ar cvq $(OUTPUTFILE) $(OBJECTS_LIB)
 	ranlib $(OUTPUTFILE)
+
 
 clean:
 	rm -f $(OBJECTS) $(EXECUTABLE) $(OUTPUTFILE)
