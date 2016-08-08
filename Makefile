@@ -2,7 +2,7 @@
 # Makefile
 # 
 CC=gcc
-CFLAGS=-c -g -Wall 
+CFLAGS=-c -g -Wall -std=gnu99
 LDFLAGS=-lexpat -L .
 USE_EXPAT=1
 
