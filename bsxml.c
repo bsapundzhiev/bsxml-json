@@ -147,7 +147,7 @@ XmlAttribute *XmlNode_getAttribute(struct XmlNode *node, const String key)
     return (XmlAttribute*)cpo_array_bsearch(node->m_attributes, &a, XmlAttribute_comparer);
 }
 
-String XmlNode_getAttributeValue(struct XmlNode *node, const String key) 
+String XmlNode_getAttributeValue(struct XmlNode *node, const String key)
 {
     String value = NULL;
     XmlAttribute *attr = XmlNode_getAttribute(node, key);
@@ -466,12 +466,13 @@ static void endElement(void *userData, const char *name )
 static void characterData( void *userData, const char *s, int len )
 {
     XmlParser *parser = (XmlParser *)userData;
-    char *str = (char*)malloc(len + 1);
-    if (!str) return;
-    strncpy(str,s,len );
-    str[len] = 0;
+
     if (parser->m_nodeStack->num > 0) {
-        void *ptr =  stack_back(parser->m_nodeStack);
+        void *ptr = stack_back(parser->m_nodeStack);
+        char *str = (char*)malloc(len + 1);
+        if (!str) return;
+        strncpy(str,s,len );
+        str[len] = 0;
         XmlNode *node = (XmlNode*) ARR_VAL(ptr);
         XmlNode_setValue(node, str);
         free(str);
