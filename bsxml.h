@@ -84,18 +84,20 @@ struct XmlNode {
     XmlAttributes * XmlNode_getAttributes(struct XmlNode * node);
     //! Get XML Node attribute for specified key.
     XmlAttribute * XmlNode_getAttribute(struct XmlNode * node, const String key );
-    // Get string value 
+    //! Get string value
     String XmlNode_getAttributeValue(struct XmlNode *node, const String key);
     //! Check if attributes with specified key exist.
     int XmlNode_haveAttribute(struct XmlNode * node, const String key );
     //! Set new XML Node attribute (or override attribute with same key).
     void XmlNode_setAttribute(struct XmlNode * node, const String key, const String  value );   
+    //! Get number of attributes.
+    asize_t XmlNode_getAttributesCount(struct XmlNode * node);
     //! Adds new child node.
     void XmlNode_addChild(struct XmlNode * node, const XmlNodeRef child );
 
     //! Get number of child XML nodes.
-    int XmlNode_getChildCount(struct XmlNode * node);
-    
+    asize_t XmlNode_getChildCount(struct XmlNode * node);
+
     //! Get XML Node child nodes.
     XmlNodeRef XmlNode_getChild(struct XmlNode * node, int i ) ;
 
