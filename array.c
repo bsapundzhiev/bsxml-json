@@ -18,10 +18,10 @@
 #include "array.h"
 
 static int
-cpo_array_setsize(cpo_array_t *a, int elements);
+cpo_array_setsize(cpo_array_t *a, asize_t elements);
 
 cpo_array_t *
-cpo_array_create(int size, int elem_size)
+cpo_array_create(asize_t size, asize_t elem_size)
 {
     cpo_array_t *a = malloc(sizeof(cpo_array_t));
     if (a == NULL)
@@ -35,7 +35,7 @@ cpo_array_create(int size, int elem_size)
     return a;
 }
 
-static int cpo_array_preallocate(cpo_array_t *a, int elements)
+static int cpo_array_preallocate(cpo_array_t *a, asize_t elements)
 {
     void *newv;
     int newmax = a->max;
@@ -61,7 +61,7 @@ static int cpo_array_preallocate(cpo_array_t *a, int elements)
     return 0;
 }
 
-static int cpo_array_setsize(cpo_array_t *a, int elements)
+static int cpo_array_setsize(cpo_array_t *a, asize_t elements)
 {
     int result;
 
@@ -79,7 +79,7 @@ static int cpo_array_setsize(cpo_array_t *a, int elements)
 }
 
 void *
-cpo_array_get_at(cpo_array_t *a, int index)
+cpo_array_get_at(cpo_array_t *a, asize_t index)
 {
     void *elt;
     assert(a->num <= a->max);
@@ -106,7 +106,7 @@ cpo_array_push(cpo_array_t *a)
 }
 
 void *
-cpo_array_insert_at(cpo_array_t *a, int index)
+cpo_array_insert_at(cpo_array_t *a, asize_t index)
 {
     int i,nmove;
     void *elt;
@@ -145,7 +145,7 @@ cpo_array_remove(cpo_array_t *a, int index)
 }
 */
 void *
-cpo_array_remove(cpo_array_t *a, int index)
+cpo_array_remove(cpo_array_t *a, asize_t index)
 {
     void *elt;
     int i, nmove;
