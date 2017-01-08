@@ -211,26 +211,6 @@ int array_cmp_str_dsc(const void *a, const void *b)
     return strcmp((char *) b, (char *) a);
 }
 
-/* d */
-void cpo_array_dump_int(cpo_array_t *arr)
-{
-    asize_t i = 0;
-    void* x;
-    for (i = 0; i < arr->num; i++) {
-        x =  cpo_array_get_at(arr, i);
-        printf("[%d] %d\n",i, *((int*)x) );
-    }
-}
-
-void cpo_array_dump_str(cpo_array_t *arr)
-{
-    asize_t i = 0;
-    for (i = 0; i < arr->num; i++) {
-        char *x = cpo_array_get_at(arr, i);
-        printf("[%d] %s\n",i, x);
-    }
-}
-
 /* stack impl */
 void * stack_push(cpo_array_t *stack)
 {
@@ -278,6 +258,26 @@ void * stack_pop_back(cpo_array_t *stack)
 }
 
 #if _TEST
+/* d */
+void cpo_array_dump_int(cpo_array_t *arr)
+{
+    asize_t i = 0;
+    void* x;
+    for (i = 0; i < arr->num; i++) {
+        x =  cpo_array_get_at(arr, i);
+        printf("[%lu] %d\n",i, *((int*)x) );
+    }
+}
+
+void cpo_array_dump_str(cpo_array_t *arr)
+{
+    asize_t i = 0;
+    for (i = 0; i < arr->num; i++) {
+        char *x = cpo_array_get_at(arr, i);
+        printf("[%lu] %s\n",i, x);
+    }
+}
+
 int main()
 {
     int i;
