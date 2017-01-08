@@ -38,7 +38,7 @@ cpo_array_create(asize_t size, asize_t elem_size)
 static int cpo_array_preallocate(cpo_array_t *a, asize_t elements)
 {
     void *newv;
-    int newmax = a->max;
+    asize_t newmax = a->max;
 
     assert(a->num >= 0 && a->num <= a->max);
 
@@ -92,7 +92,8 @@ cpo_array_get_at(cpo_array_t *a, asize_t index)
 void *
 cpo_array_push(cpo_array_t *a)
 {
-    int ix, result;
+    int result;
+    asize_t ix;
     void * elt;
     ix = a->num;
 
@@ -108,7 +109,7 @@ cpo_array_push(cpo_array_t *a)
 void *
 cpo_array_insert_at(cpo_array_t *a, asize_t index)
 {
-    int i,nmove;
+    asize_t i,nmove;
     void *elt;
     elt =  cpo_array_push(a);
     elt =  cpo_array_get_at(a, index);
@@ -148,7 +149,7 @@ void *
 cpo_array_remove(cpo_array_t *a, asize_t index)
 {
     void *elt;
-    int i, nmove;
+    asize_t i, nmove;
     assert(a->num <= a->max);
     assert(index >= 0 && index < a->num);
 
@@ -186,7 +187,7 @@ void cpo_array_qsort(cpo_array_t *a,
 void *cpo_array_bsearch(cpo_array_t *ar, const void *key,
                         int (*compar)(const void *, const void *))
 {
-	cpo_array_qsort(ar, compar);
+    cpo_array_qsort(ar, compar);
     return bsearch(key, ar->v, ar->num, ar->elem_size, compar);
 }
 
@@ -213,7 +214,7 @@ int array_cmp_str_dsc(const void *a, const void *b)
 /* d */
 void cpo_array_dump_int(cpo_array_t *arr)
 {
-    int i = 0;
+    asize_t i = 0;
     void* x;
     for (i = 0; i < arr->num; i++) {
         x =  cpo_array_get_at(arr, i);
@@ -223,7 +224,7 @@ void cpo_array_dump_int(cpo_array_t *arr)
 
 void cpo_array_dump_str(cpo_array_t *arr)
 {
-    int i = 0;
+    asize_t i = 0;
     for (i = 0; i < arr->num; i++) {
         char *x = cpo_array_get_at(arr, i);
         printf("[%d] %s\n",i, x);

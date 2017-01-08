@@ -9,14 +9,14 @@
 typedef size_t asize_t;
 
 typedef struct s_array {
-	asize_t num;
-	asize_t max;
-	void *v;
-	asize_t elem_size;
+    asize_t num;
+    asize_t max;
+    void *v;
+    asize_t elem_size;
 } cpo_array_t;
 
 cpo_array_t *
-cpo_array_create(asize_t size , asize_t elem_size);
+cpo_array_create(asize_t size, asize_t elem_size);
 
 void *
 cpo_array_get_at(cpo_array_t *a, asize_t index);
