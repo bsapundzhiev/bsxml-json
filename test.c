@@ -176,7 +176,7 @@ void create_test ()
 
 void find_test()
 {
-    int i;
+    asize_t i;
     XmlParser xmlParser;
     XmlNodeRef root = XmlParser_parse(&xmlParser,  xml );
     CLK_ON(&t);

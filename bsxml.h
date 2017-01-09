@@ -99,7 +99,7 @@ struct XmlNode {
     asize_t XmlNode_getChildCount(struct XmlNode * node);
 
     //! Get XML Node child nodes.
-    XmlNodeRef XmlNode_getChild(struct XmlNode * node, int i ) ;
+    XmlNodeRef XmlNode_getChild(struct XmlNode * node, asize_t i ) ;
 
     //! Find node with specified tag.
     XmlNodeRef XmlNode_findChild(struct XmlNode * node, const String tag ) ;

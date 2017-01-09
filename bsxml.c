@@ -207,7 +207,7 @@ void XmlNode_addChild(struct XmlNode *node, const XmlNodeRef child )
     }
 }
 
-XmlNodeRef XmlNode_getChild(struct XmlNode *node, int i)
+XmlNodeRef XmlNode_getChild(struct XmlNode *node, asize_t i)
 {
     assert( i >= 0 && i < node->m_childs->num );
     return cpo_array_get_at(node->m_childs, i);
