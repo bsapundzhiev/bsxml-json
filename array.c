@@ -49,7 +49,7 @@ static int cpo_array_preallocate(cpo_array_t *a, asize_t elements)
     newv = malloc(newmax * a->elem_size);
 
     if (newv == NULL)
-        return ENOMEM;
+        return -1;
 
     memcpy(newv, a->v, a->num * a->elem_size);
 
@@ -82,12 +82,10 @@ void *
 cpo_array_get_at(cpo_array_t *a, asize_t index)
 {
     void *elt = NULL;
-    assert(a->num <= a->max);
-    assert(index >= 0 && index <= a->num);
 
-	if (index >= 0 && index <= a->num) {
-		elt = (unsigned char*) a->v + a->elem_size * index;
-	}
+    if (index >= 0 && index < a->num) {
+        elt = (unsigned char*) a->v + a->elem_size * index;
+    }
     return elt;
 }
 
@@ -99,9 +97,9 @@ cpo_array_push(cpo_array_t *a)
 
     int result = cpo_array_setsize(a, ix + 1);
 
-	if(!result){
-		elt = (unsigned char*) a->v + a->elem_size * ix;
-	}
+    if(!result) {
+        elt = (unsigned char*) a->v + a->elem_size * ix;
+    }
     return elt;
 }
 
@@ -109,16 +107,17 @@ void *
 cpo_array_insert_at(cpo_array_t *a, asize_t index)
 {
     void *elt = NULL;
-	asize_t nmove;
 
-	int result = cpo_array_setsize(a, a->num + 1);
-	if(!result) {
-		nmove = a->num - index - 1;
-		memmove((unsigned char*)a->v + a->elem_size * (index + 1),
-				(unsigned char*)a->v + a->elem_size * index, nmove * a->elem_size);
+    if (index >= 0 && index <= a->num) {
+        int result = cpo_array_setsize(a, a->num + 1);
+        if(!result) {
+            asize_t nmove = a->num - index - 1;
+            memmove((unsigned char*)a->v + a->elem_size * (index + 1),
+                    (unsigned char*)a->v + a->elem_size * index, nmove * a->elem_size);
 
-		elt = (unsigned char*) a->v + a->elem_size * index;
-	}
+            elt = (unsigned char*) a->v + a->elem_size * index;
+        }
+    }
     return elt;
 }
 
@@ -126,22 +125,21 @@ cpo_array_insert_at(cpo_array_t *a, asize_t index)
 void *
 cpo_array_remove(cpo_array_t *a, asize_t index)
 {
-    int nmove;
+
     void *elt = NULL;
-	asize_t ix = a->num;
-    assert(a->num <= a->max);
-    assert(index >= 0 && index < a->num);
 
-    nmove = a->num - index - 1;
-	
-	memmove((unsigned char*)a->v +a->elem_size * a->num,
-			(unsigned char*)a->v +a->elem_size * index, a->elem_size);
+    if (index >= 0 && index < a->num) {
+        asize_t nmove = a->num - index - 1;
 
-	memmove((unsigned char*) a->v + a->elem_size * index, 
-			(unsigned char*) a->v + a->elem_size * (index + 1), nmove * a->elem_size);
+        memmove((unsigned char*)a->v +a->elem_size * a->num,
+                (unsigned char*)a->v +a->elem_size * index, a->elem_size);
 
-	elt = (unsigned char*)a->v + a->elem_size * a->num;
-	a->num--;
+        memmove((unsigned char*) a->v + a->elem_size * index,
+                (unsigned char*) a->v + a->elem_size * (index + 1), nmove * a->elem_size);
+
+        elt = (unsigned char*)a->v + a->elem_size * a->num;
+        a->num--;
+    }
     return elt;
 }
 
@@ -258,7 +256,7 @@ void * stack_pop_back(cpo_array_t *stack)
     return  cpo_array_remove(stack, stack->num -1);
 }
 
-#if _DEBUG
+#ifdef _ARRAY_TEST
 /* d */
 void cpo_array_dump_int(cpo_array_t *arr)
 {
@@ -278,7 +276,7 @@ void cpo_array_dump_str(cpo_array_t *arr)
         printf("[%lu] %s\n",i, x);
     }
 }
-/*
+
 int main()
 {
     int i;
@@ -302,7 +300,7 @@ int main()
 
     for (i=0; i< 10; i++) {
         x = stack_pop_back(&arr);
-        printf("pop %d\n", *((int*)x) );
+        printf("pop[%d] %d\n", i, *((int*)x) );
     }
     //printf("ins at %d num %d\n", i, arr.num);
     //x = cpo_array_insert_at(&arr, 6);
@@ -310,5 +308,5 @@ int main()
 
     cpo_array_dump_int(&arr);
     free(arr.v);
-}*/
+}
 #endif
