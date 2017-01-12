@@ -94,59 +94,58 @@ cpo_array_get_at(cpo_array_t *a, asize_t index)
 void *
 cpo_array_push(cpo_array_t *a)
 {
-    int result;
-    asize_t ix;
-    void * elt;
-    ix = a->num;
+    void * elt = NULL;
+    asize_t ix = a->num;
 
-    result = cpo_array_setsize(a, ix + 1);
-    if (result) {
-        return NULL;
-    }
+    int result = cpo_array_setsize(a, ix + 1);
 
-    elt = (unsigned char*) a->v + a->elem_size * ix;
+	if(!result){
+		elt = (unsigned char*) a->v + a->elem_size * ix;
+	}
     return elt;
 }
 
 void *
 cpo_array_insert_at(cpo_array_t *a, asize_t index)
 {
-    asize_t i,nmove;
-    void *elt;
-    elt =  cpo_array_push(a);
-    elt =  cpo_array_get_at(a, index);
+    void *elt = NULL;
+	asize_t nmove;
 
-    if (index < a->num) {
+	int result = cpo_array_setsize(a, a->num + 1);
+	if(!result) {
+		nmove = a->num - index - 1;
+		memmove((unsigned char*)a->v + a->elem_size * (index + 1),
+				(unsigned char*)a->v + a->elem_size * index, nmove * a->elem_size);
 
-        for (i = a->num-1 ; i >= index -1; i--) {
-            nmove = i + 1;
-            memmove((unsigned char*)a->v + a->elem_size * nmove,
-                    (unsigned char*)a->v + a->elem_size * i, a->elem_size);
-        }
-    }
+		elt = (unsigned char*) a->v + a->elem_size * index;
+	}
+    return elt;
+}
 
-    //elt = (unsigned char*) a->v + a->elem_size * index;
+
+void *
+cpo_array_remove(cpo_array_t *a, asize_t index)
+{
+    int nmove;
+    void *elt = NULL;
+	asize_t ix = a->num;
+    assert(a->num <= a->max);
+    assert(index >= 0 && index < a->num);
+
+    nmove = a->num - index - 1;
+	
+	memmove((unsigned char*)a->v +a->elem_size * a->num,
+			(unsigned char*)a->v +a->elem_size * index, a->elem_size);
+
+	memmove((unsigned char*) a->v + a->elem_size * index, 
+			(unsigned char*) a->v + a->elem_size * (index + 1), nmove * a->elem_size);
+
+	elt = (unsigned char*)a->v + a->elem_size * a->num;
+	a->num--;
     return elt;
 }
 
 /*
-void *
-cpo_array_remove(cpo_array_t *a, int index)
-{
-    int nmove;
-    void *elt;
-    assert(a->num <= a->max);
-    assert(index >= 0 && index < a->num);
-
-    nmove = a->num - index;
-
-    memmove(a->v, (unsigned char*) a->v + index, nmove * a->elem_size);
-
-    elt = (unsigned char *) a->v + (a->num * a->elem_size);
-    a->num--;
-    return elt;
-}
-*/
 void *
 cpo_array_remove(cpo_array_t *a, asize_t index)
 {
@@ -171,7 +170,7 @@ cpo_array_remove(cpo_array_t *a, asize_t index)
     elt = (unsigned char*)a->v + a->elem_size * a->num;
     a->num--;
     return elt;
-}
+}*/
 
 void cpo_array_destroy(cpo_array_t *a)
 {
@@ -259,7 +258,7 @@ void * stack_pop_back(cpo_array_t *stack)
     return  cpo_array_remove(stack, stack->num -1);
 }
 
-#if _TEST
+#if _DEBUG
 /* d */
 void cpo_array_dump_int(cpo_array_t *arr)
 {
@@ -279,7 +278,7 @@ void cpo_array_dump_str(cpo_array_t *arr)
         printf("[%lu] %s\n",i, x);
     }
 }
-
+/*
 int main()
 {
     int i;
@@ -307,9 +306,9 @@ int main()
     }
     //printf("ins at %d num %d\n", i, arr.num);
     //x = cpo_array_insert_at(&arr, 6);
-    //*((int*)x) = 5000;*/
+    //*((int*)x) = 5000;
 
     cpo_array_dump_int(&arr);
     free(arr.v);
-}
+}*/
 #endif
