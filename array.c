@@ -81,11 +81,13 @@ static int cpo_array_setsize(cpo_array_t *a, asize_t elements)
 void *
 cpo_array_get_at(cpo_array_t *a, asize_t index)
 {
-    void *elt;
+    void *elt = NULL;
     assert(a->num <= a->max);
     assert(index >= 0 && index <= a->num);
 
-    elt = (unsigned char*) a->v + a->elem_size * index;
+	if (index >= 0 && index <= a->num) {
+		elt = (unsigned char*) a->v + a->elem_size * index;
+	}
     return elt;
 }
 
