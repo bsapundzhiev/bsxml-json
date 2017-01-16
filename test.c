@@ -281,18 +281,78 @@ void json_create_test ()
     CLK_OFF(&t);
 }
 
+#ifdef _ARRAY_TEST
+/* d */
+void cpo_array_dump_int(cpo_array_t *arr)
+{
+    asize_t i = 0;
+    void* x;
+    for (i = 0; i < arr->num; i++) {
+        x =  cpo_array_get_at(arr, i);
+        printf("[%lu] %d\n",i, *((int*)x) );
+    }
+}
+
+void cpo_array_dump_str(cpo_array_t *arr)
+{
+    asize_t i = 0;
+    for (i = 0; i < arr->num; i++) {
+        char *x = cpo_array_get_at(arr, i);
+        printf("[%lu] %s\n",i, x);
+    }
+}
+
+int array_test()
+{
+    int i;
+    void *x;
+    cpo_array_t arr;
+
+    arr.elem_size = sizeof(int);
+    arr.v = calloc(11, sizeof(int));
+    arr.num = 0;
+    arr.max = 11;
+
+    for (i=0; i< 10; i++) {
+
+        //x = cpo_array_push(&arr);
+
+        x = stack_push(&arr);
+        *((int*)x) = i;
+    }
+
+    cpo_array_dump_int(&arr);
+
+    for (i=0; i< 10; i++) {
+        x = stack_pop_back(&arr);
+        printf("pop[%d] %d\n", i, *((int*)x) );
+    }
+    //printf("ins at %d num %d\n", i, arr.num);
+    //x = cpo_array_insert_at(&arr, 6);
+    //*((int*)x) = 5000;
+
+    cpo_array_dump_int(&arr);
+    free(arr.v);
+}
+#endif
+
 int main(int argc, char **argv)
 {
+#ifdef _ARRAY_TEST
+	array_test();
+#else
     file_test(argc,argv);
     create_test ();
     find_test();
     /*test json */
     json_create_test();
     json_parser_test();
-
+#endif
 #ifdef _WIN32
     _CrtDumpMemoryLeaks();
     system("pause");
 #endif
     return 0;
 }
+
+

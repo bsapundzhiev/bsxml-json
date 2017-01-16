@@ -40,12 +40,10 @@ static int cpo_array_preallocate(cpo_array_t *a, asize_t elements)
     void *newv;
     asize_t newmax = a->max;
 
-    assert(a->num >= 0 && a->num <= a->max);
-
     while (elements > newmax) {
         newmax = (newmax + 1) * 2;
     }
-
+	
     newv = malloc(newmax * a->elem_size);
 
     if (newv == NULL)
@@ -63,12 +61,8 @@ static int cpo_array_preallocate(cpo_array_t *a, asize_t elements)
 
 static int cpo_array_setsize(cpo_array_t *a, asize_t elements)
 {
-    int result;
-
-    assert(a->num >= 0 && a->num <= a->max);
-
     if (elements > a->max) {
-        result = cpo_array_preallocate(a, elements);
+        int result = cpo_array_preallocate(a, elements);
         if (result) {
             return result;
         }
@@ -125,7 +119,6 @@ cpo_array_insert_at(cpo_array_t *a, asize_t index)
 void *
 cpo_array_remove(cpo_array_t *a, asize_t index)
 {
-
     void *elt = NULL;
 
     if (index >= 0 && index < a->num) {
@@ -142,33 +135,6 @@ cpo_array_remove(cpo_array_t *a, asize_t index)
     }
     return elt;
 }
-
-/*
-void *
-cpo_array_remove(cpo_array_t *a, asize_t index)
-{
-    void *elt;
-    asize_t i, nmove;
-    assert(a->num <= a->max);
-    assert(index >= 0 && index < a->num);
-
-    for ( i = index ; i < a->num; i++) {
-        nmove = i + 1;
-
-        if (i == index) {
-            memmove((unsigned char*)a->v + a->elem_size * a->num,
-                    (unsigned char*)a->v + a->elem_size * i, a->elem_size);
-        }
-
-        memmove((unsigned char*)a->v + a->elem_size * i,
-                (unsigned char*)a->v + a->elem_size * nmove, a->elem_size);
-
-    }
-
-    elt = (unsigned char*)a->v + a->elem_size * a->num;
-    a->num--;
-    return elt;
-}*/
 
 void cpo_array_destroy(cpo_array_t *a)
 {
@@ -255,58 +221,3 @@ void * stack_pop_back(cpo_array_t *stack)
 
     return  cpo_array_remove(stack, stack->num -1);
 }
-
-#ifdef _ARRAY_TEST
-/* d */
-void cpo_array_dump_int(cpo_array_t *arr)
-{
-    asize_t i = 0;
-    void* x;
-    for (i = 0; i < arr->num; i++) {
-        x =  cpo_array_get_at(arr, i);
-        printf("[%lu] %d\n",i, *((int*)x) );
-    }
-}
-
-void cpo_array_dump_str(cpo_array_t *arr)
-{
-    asize_t i = 0;
-    for (i = 0; i < arr->num; i++) {
-        char *x = cpo_array_get_at(arr, i);
-        printf("[%lu] %s\n",i, x);
-    }
-}
-
-int main()
-{
-    int i;
-    void *x;
-    cpo_array_t arr;
-
-    arr.elem_size = sizeof(int);
-    arr.v = calloc(32, sizeof(int));
-    arr.num = 0;
-    arr.max = 32;
-
-    for (i=0; i< 10; i++) {
-
-        //x = cpo_array_push(&arr);
-
-        x = stack_push(&arr);
-        *((int*)x) = i;
-    }
-
-    cpo_array_dump_int(&arr);
-
-    for (i=0; i< 10; i++) {
-        x = stack_pop_back(&arr);
-        printf("pop[%d] %d\n", i, *((int*)x) );
-    }
-    //printf("ins at %d num %d\n", i, arr.num);
-    //x = cpo_array_insert_at(&arr, 6);
-    //*((int*)x) = 5000;
-
-    cpo_array_dump_int(&arr);
-    free(arr.v);
-}
-#endif
