@@ -12,9 +12,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stddef.h>
-#include <assert.h>
-#include <errno.h>
 #include "array.h"
 
 static int
@@ -40,8 +37,8 @@ static int cpo_array_preallocate(cpo_array_t *a, asize_t elements)
     void *newv;
     asize_t newmax = a->max;
 
-    while (elements > newmax) {
-        newmax = (newmax + 1) * 2;
+    while (elements >= newmax) {
+        newmax = (newmax + 1);
     }
 	
     newv = malloc(newmax * a->elem_size);

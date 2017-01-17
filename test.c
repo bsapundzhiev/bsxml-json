@@ -302,22 +302,21 @@ void cpo_array_dump_str(cpo_array_t *arr)
     }
 }
 
-int array_test()
+void array_test()
 {
     int i;
     void *x;
     cpo_array_t arr;
 
     arr.elem_size = sizeof(int);
-    arr.v = calloc(11, sizeof(int));
+    arr.v = calloc(1, sizeof(int));
     arr.num = 0;
-    arr.max = 11;
+    arr.max = 1;
 
     for (i=0; i< 10; i++) {
 
-        //x = cpo_array_push(&arr);
-
-        x = stack_push(&arr);
+        x = cpo_array_push(&arr);
+        //x = stack_push(&arr);
         *((int*)x) = i;
     }
 
@@ -354,5 +353,3 @@ int main(int argc, char **argv)
 #endif
     return 0;
 }
-
-
