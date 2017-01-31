@@ -21,8 +21,9 @@ cpo_array_t *
 cpo_array_create(asize_t size, asize_t elem_size)
 {
     cpo_array_t *a = malloc(sizeof(cpo_array_t));
-    if (a == NULL)
+    if (a == NULL) {
         return NULL;
+    }
 
     a->v = calloc(size, elem_size);
     a->num = 0;
@@ -43,8 +44,9 @@ static int cpo_array_preallocate(cpo_array_t *a, asize_t elements)
 	
     newv = malloc(newmax * a->elem_size);
 
-    if (newv == NULL)
+    if (newv == NULL) {
         return -1;
+    }
 
     memcpy(newv, a->v, a->num * a->elem_size);
 
@@ -74,7 +76,7 @@ cpo_array_get_at(cpo_array_t *a, asize_t index)
 {
     void *elt = NULL;
 
-    if (index >= 0 && index < a->num) {
+    if (index < a->num) {
         elt = (unsigned char*) a->v + a->elem_size * index;
     }
     return elt;
@@ -88,7 +90,7 @@ cpo_array_push(cpo_array_t *a)
 
     int result = cpo_array_setsize(a, ix + 1);
 
-    if(!result) {
+    if (!result) {
         elt = (unsigned char*) a->v + a->elem_size * ix;
     }
     return elt;
@@ -99,7 +101,7 @@ cpo_array_insert_at(cpo_array_t *a, asize_t index)
 {
     void *elt = NULL;
 
-    if (index >= 0 && index <= a->num) {
+    if (index <= a->num) {
         int result = cpo_array_setsize(a, a->num + 1);
         if(!result) {
             asize_t nmove = a->num - index - 1;
@@ -118,7 +120,7 @@ cpo_array_remove(cpo_array_t *a, asize_t index)
 {
     void *elt = NULL;
 
-    if (index >= 0 && index < a->num) {
+    if (index < a->num) {
         asize_t nmove = a->num - index - 1;
 
         memmove((unsigned char*)a->v +a->elem_size * a->num,
@@ -135,8 +137,9 @@ cpo_array_remove(cpo_array_t *a, asize_t index)
 
 void cpo_array_destroy(cpo_array_t *a)
 {
-    if (a->v)
+    if (a->v) {
         free(a->v);
+    }
     free(a);
 }
 
