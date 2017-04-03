@@ -115,7 +115,6 @@ void XmlNode_deleteTree(struct XmlNode *root)
 
     if (root->m_type == NODE_ROOT) {
         free(root);
-        root = NULL;
     }
 }
 
@@ -209,7 +208,7 @@ void XmlNode_addChild(struct XmlNode *node, const XmlNodeRef child )
 
 XmlNodeRef XmlNode_getChild(struct XmlNode *node, asize_t i)
 {
-    assert( i >= 0 && i < node->m_childs->num );
+    assert( i < node->m_childs->num );
     return cpo_array_get_at(node->m_childs, i);
 }
 
@@ -406,9 +405,9 @@ void XmlNode_toFile(struct XmlNode *node, const char *fileName)
     FILE *f = fopen (fileName, "w+b");
     if (f) {
         char *buffer = XmlNode_getXML(node);
-        size_t len = strlen(buffer);
 
         if (buffer) {
+            size_t len = strlen(buffer);
             fprintf(f, "<?xml version=\"1.0\" encoding=\"%s\"?>", ENC_TYPE_UTF8);
             fwrite(buffer, sizeof(char),len , f);
             free(buffer);
@@ -512,12 +511,12 @@ XmlNodeRef XmlParser_parse(XmlParser *parser,  const char * xml )
 
 XmlNodeRef XmlParser_parse_file(struct XmlParser *parser,  const String fileName )
 {
-    char * buffer = 0;
-    long length = 0;
     XmlNodeRef root = NULL;
     FILE *f = fopen (fileName, "rb");
 
     if (f) {
+        char * buffer;
+        long length;
         size_t read = 0;
         fseek (f, 0, SEEK_END);
         length = ftell (f);

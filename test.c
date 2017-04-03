@@ -176,11 +176,11 @@ void create_test ()
 
 void find_test()
 {
-    asize_t i;
     XmlParser xmlParser;
     XmlNodeRef root = XmlParser_parse(&xmlParser,  xml );
     CLK_ON(&t);
     if (root) {
+        asize_t i;
 
         for (i = 0; i < XmlNode_getChildCount(root); i++) {
 
@@ -286,9 +286,8 @@ void json_create_test ()
 void cpo_array_dump_int(cpo_array_t *arr)
 {
     asize_t i = 0;
-    void* x;
     for (i = 0; i < arr->num; i++) {
-        x =  cpo_array_get_at(arr, i);
+        void* x =  cpo_array_get_at(arr, i);
         printf("[%lu] %d\n",i, *((int*)x) );
     }
 }

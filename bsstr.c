@@ -54,7 +54,7 @@ bsstr * bsstr_realloc(bsstr *buf, size_t len)
     size_t newlen = buf->length + len + 1; /* add 1 for NUL */
 
     if (newlen > buf->capacity) {
-        void *new_mem = NULL;
+        void *new_mem;
         buf->capacity = (newlen + (STRING_BLOCK_SIZE - 1)) & mask;
         //buf->string = (char *)realloc(buf->string, buf->capacity);
         new_mem  = malloc(buf->capacity);
@@ -79,7 +79,7 @@ void bsstr_add(bsstr* str, const char* string)
 /*based on snprintf man */
 void bsstr_printf(bsstr* buf, char* fmt, ...)
 {
-    int n, size = STRING_BLOCK_SIZE;  
+    int size = STRING_BLOCK_SIZE;  
     va_list ap;
     int end = buf->length;
     bsstr *p = bsstr_realloc(buf, size);
@@ -87,6 +87,7 @@ void bsstr_printf(bsstr* buf, char* fmt, ...)
         return;
     }
     while (1) {
+        int n;
         va_start(ap, fmt);
         n = vsnprintf(buf->string + end, size, fmt, ap);
         va_end(ap);
