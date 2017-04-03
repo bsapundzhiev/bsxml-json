@@ -194,7 +194,6 @@ void JsonNode_deleteTree(JsonNode *root)
 
     if (root->m_type == JSON_ROOT) {
         free(root);
-        root = NULL;
     }
 }
 
@@ -387,11 +386,11 @@ static char JsonParser_prev_char(const char *p , int pos)
 static int JsonParser_internalParse(struct  ParserInternal *pi, const char* json , int len)
 {
     int i;
-    char ch;
     enum eElemType elemType;
     const char *p = json;
 
     for (i =0; i < len + 1; i++) {
+        char ch;
 
         if(pi->error != JSON_ERR_NONE) break;
 
@@ -577,12 +576,12 @@ static void JsonParser_stripCommentsFromBuffer(char *buff, long size)
 
 JsonNode * JsonParser_parseFile(struct JsonParser *parser, const char * fileName)
 {
-    char * buffer = 0;
-    long length = 0;
     JsonNode * root = NULL;
     FILE *f = fopen (fileName, "rb");
 
     if (f) {
+        char * buffer;
+        long length;
         size_t read = 0;
         fseek (f, 0, SEEK_END);
         length = ftell (f);
