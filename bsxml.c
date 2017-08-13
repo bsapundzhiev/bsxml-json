@@ -341,9 +341,9 @@ String XmlNode_getXML(struct XmlNode *node)
     bsstr *buff = bsstr_create("");
     asize_t i;
     if (node->m_attributes->num == 0) {
-        bsstr_printf(buff, "<%s>\n", node->m_tag);
+        bsstr_printf(buff, "<%s>", node->m_tag);
     } else {
-        bsstr_printf(buff, "<%s ",node->m_tag);
+        bsstr_printf(buff, "<%s ", node->m_tag);
         // Put attributes.
         for (i =0; i< node->m_attributes->num; i++) {
             XmlAttribute *a = cpo_array_get_at(node->m_attributes, i);
@@ -355,7 +355,11 @@ String XmlNode_getXML(struct XmlNode *node)
             xmlStr = bsstr_release(buff);
             return xmlStr;
         }
-        bsstr_printf(buff, ">\n");
+        bsstr_printf(buff, ">");
+    }
+
+    if (node->m_childs->num) {    
+      bsstr_add(buff, "\n");
     }
 
     if (!isNullorEmpty(node->m_content)) {
@@ -384,7 +388,6 @@ String XmlNode_getXML(struct XmlNode *node)
                 break;
             }
         }
-        bsstr_printf(buff,"\n");
     }
 
     for (i = 0; i < node->m_childs->num; i++) {
@@ -408,7 +411,7 @@ void XmlNode_toFile(struct XmlNode *node, const char *fileName)
 
         if (buffer) {
             size_t len = strlen(buffer);
-            fprintf(f, "<?xml version=\"1.0\" encoding=\"%s\"?>", ENC_TYPE_UTF8);
+            fprintf(f, "<?xml version=\"1.0\" encoding=\"%s\"?>\n", ENC_TYPE_UTF8);
             fwrite(buffer, sizeof(char),len , f);
             free(buffer);
         }

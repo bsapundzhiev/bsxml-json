@@ -8,8 +8,8 @@ NOTE: XML Parser is wrapper around expat library.
 USE_EXPAT=1 in Makefile comment it out for none(only json). 
 
 Build as static libray with 'gnu make':
-
-	$make static 
+	$sudo apt-get install libexpat1-dev
+	$make lib 
 
 License: 
 -----------
