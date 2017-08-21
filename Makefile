@@ -36,4 +36,4 @@ clean:
 	rm -f $(OBJECTS) $(EXECUTABLE) $(OUTPUTFILE)
 	
 format:
-	astyle --style=stroustrup -s4 $(SOURCES)
+	astyle --style=stroustrup -s4 $(SOURCES) *.h

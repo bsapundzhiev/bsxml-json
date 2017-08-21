@@ -126,7 +126,7 @@ void XmlNode_print(struct XmlNode *root)
         XmlNode_print(node);
     }
 
-    printf("Node %s content:%s", root->m_tag , root->m_content != NULL ? root->m_content : NULL);
+    printf("Node %s content:%s", root->m_tag, root->m_content != NULL ? root->m_content : NULL);
 }
 
 int XmlNode_isTag(struct XmlNode *node, const String tag )
@@ -192,8 +192,8 @@ XmlNode * XmlNode_createChild(struct XmlNode *node, const String tag, const Stri
         XmlNode_setValue(child, text );
     }
 
-    child->m_childs = cpo_array_create(XMLTREE_CHILDSIZE , sizeof(struct XmlNode));
-    child->m_attributes = cpo_array_create(XMLTREE_ATTRSIZE , sizeof( struct XmlAttribute) );
+    child->m_childs = cpo_array_create(XMLTREE_CHILDSIZE, sizeof(struct XmlNode));
+    child->m_attributes = cpo_array_create(XMLTREE_ATTRSIZE, sizeof( struct XmlAttribute) );
     return child;
 }
 
@@ -279,7 +279,7 @@ int XmlNode_getSubNodeValue(struct XmlNode *node, const String tag, String *valu
 {
     XmlNodeRef child = XmlNode_findChild(node, tag );
     if (child) {
-        XmlNode_getValue(child , value );
+        XmlNode_getValue(child, value );
         return XML_OK;
     }
     return XML_NOK;
@@ -347,7 +347,7 @@ String XmlNode_getXML(struct XmlNode *node)
         // Put attributes.
         for (i =0; i< node->m_attributes->num; i++) {
             XmlAttribute *a = cpo_array_get_at(node->m_attributes, i);
-            bsstr_printf(buff, "%s =\"%s\" ",a->key , a->value);
+            bsstr_printf(buff, "%s =\"%s\" ",a->key, a->value);
         }
 
         if (isNullorEmpty(node->m_content) && !node->m_childs->num) {
@@ -358,8 +358,8 @@ String XmlNode_getXML(struct XmlNode *node)
         bsstr_printf(buff, ">");
     }
 
-    if (node->m_childs->num) {    
-      bsstr_add(buff, "\n");
+    if (node->m_childs->num) {
+        bsstr_add(buff, "\n");
     }
 
     if (!isNullorEmpty(node->m_content)) {
@@ -412,7 +412,7 @@ void XmlNode_toFile(struct XmlNode *node, const char *fileName)
         if (buffer) {
             size_t len = strlen(buffer);
             fprintf(f, "<?xml version=\"1.0\" encoding=\"%s\"?>\n", ENC_TYPE_UTF8);
-            fwrite(buffer, sizeof(char),len , f);
+            fwrite(buffer, sizeof(char),len, f);
             free(buffer);
         }
         fclose (f);
@@ -436,7 +436,7 @@ static void startElement(void *userData, const char *name, const char **atts)
     }
 
     if (parent) {
-        node = XmlNode_createChild(parent, (const String)name , NULL);
+        node = XmlNode_createChild(parent, (const String)name, NULL);
     } else {
         node = parser->m_root;
     }
@@ -503,8 +503,8 @@ XmlNodeRef XmlParser_parse(XmlParser *parser,  const char * xml )
     } else {
         parser->m_errorString = (char*) XML_ErrorString(XML_GetErrorCode(parser->m_parser));
         printf("XML Error: %s at line %ld\n",
-            XmlParser_getErrorString(parser),
-            XML_GetCurrentLineNumber(parser->m_parser));
+               XmlParser_getErrorString(parser),
+               XML_GetCurrentLineNumber(parser->m_parser));
     }
 
     XML_ParserFree(parser->m_parser);

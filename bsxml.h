@@ -8,7 +8,7 @@
  * your option) any later version.
  *
  */
- 
+
 #ifndef __BSXML_H
 #define __BSXML_H
 
@@ -26,7 +26,7 @@
 
 enum { XML_NOK = 0, XML_OK };
 enum { NODE_NONE, NODE_ROOT, NODE_CHILD };
- 
+
 typedef char* String;
 
 typedef struct XmlNode * XmlNodeRef;
@@ -42,8 +42,7 @@ struct XmlAttribute {
     String value;
 };
 
-struct XmlParser
-{
+struct XmlParser {
     XmlNodeRef  m_root;
     XML_Parser  m_parser;
     String      m_errorString;
@@ -55,12 +54,12 @@ XmlNodeRef XmlParser_parse(XmlParser *parser,  const char * xml );
 const String XmlParser_getErrorString(struct XmlParser *parser);
 
 struct XmlNode {
-    //node type 
-    int m_type; 
-    //line of node 
-    int m_line; 
-    //node xml tag 
-    String m_tag; 
+    //node type
+    int m_type;
+    //line of node
+    int m_line;
+    //node xml tag
+    String m_tag;
     //! Content of XML node.
     String m_content;
     //! Parent XML node.
@@ -70,73 +69,72 @@ struct XmlNode {
     //! Xml node attributes.
     XmlAttributes *m_attributes;
 };
-    /*create root element */
-    struct XmlNode *XmlNode_Create( const String tag );
-    struct XmlNode *XmlNode_createChild(struct XmlNode *node, const String tag, const String text);
-    void XmlNode_deleteTree(struct XmlNode *root);
-    void XmlNode_delete(struct XmlNode *node);
-    //! Non virtual destructor, XmlNode cannot be used as a base class.
-    //! Get XML node tag.
-    String XmlNode_getTag(struct XmlNode * node);
-    //! Return true if givven tag equal to node tag.
-    int XmlNode_isTag( struct XmlNode * node, const String tag );
-    //! Get XML Node attributes.
-    XmlAttributes * XmlNode_getAttributes(struct XmlNode * node);
-    //! Get XML Node attribute for specified key.
-    XmlAttribute * XmlNode_getAttribute(struct XmlNode * node, const String key );
-    //! Get string value
-    String XmlNode_getAttributeValue(struct XmlNode *node, const String key);
-    //! Check if attributes with specified key exist.
-    int XmlNode_haveAttribute(struct XmlNode * node, const String key );
-    //! Set new XML Node attribute (or override attribute with same key).
-    void XmlNode_setAttribute(struct XmlNode * node, const String key, const String  value );   
-    //! Get number of attributes.
-    asize_t XmlNode_getAttributesCount(struct XmlNode * node);
-    //! Adds new child node.
-    void XmlNode_addChild(struct XmlNode * node, const XmlNodeRef child );
+/*create root element */
+struct XmlNode *XmlNode_Create( const String tag );
+struct XmlNode *XmlNode_createChild(struct XmlNode *node, const String tag, const String text);
+void XmlNode_deleteTree(struct XmlNode *root);
+void XmlNode_delete(struct XmlNode *node);
+//! Non virtual destructor, XmlNode cannot be used as a base class.
+//! Get XML node tag.
+String XmlNode_getTag(struct XmlNode * node);
+//! Return true if givven tag equal to node tag.
+int XmlNode_isTag( struct XmlNode * node, const String tag );
+//! Get XML Node attributes.
+XmlAttributes * XmlNode_getAttributes(struct XmlNode * node);
+//! Get XML Node attribute for specified key.
+XmlAttribute * XmlNode_getAttribute(struct XmlNode * node, const String key );
+//! Get string value
+String XmlNode_getAttributeValue(struct XmlNode *node, const String key);
+//! Check if attributes with specified key exist.
+int XmlNode_haveAttribute(struct XmlNode * node, const String key );
+//! Set new XML Node attribute (or override attribute with same key).
+void XmlNode_setAttribute(struct XmlNode * node, const String key, const String  value );
+//! Get number of attributes.
+asize_t XmlNode_getAttributesCount(struct XmlNode * node);
+//! Adds new child node.
+void XmlNode_addChild(struct XmlNode * node, const XmlNodeRef child );
 
-    //! Get number of child XML nodes.
-    asize_t XmlNode_getChildCount(struct XmlNode * node);
+//! Get number of child XML nodes.
+asize_t XmlNode_getChildCount(struct XmlNode * node);
 
-    //! Get XML Node child nodes.
-    XmlNodeRef XmlNode_getChild(struct XmlNode * node, asize_t i ) ;
+//! Get XML Node child nodes.
+XmlNodeRef XmlNode_getChild(struct XmlNode * node, asize_t i );
 
-    //! Find node with specified tag.
-    XmlNodeRef XmlNode_findChild(struct XmlNode * node, const String tag ) ;
+//! Find node with specified tag.
+XmlNodeRef XmlNode_findChild(struct XmlNode * node, const String tag );
 
-    //! Get parent XML node.
-    XmlNodeRef  XmlNode_getParent(struct XmlNode * node);
+//! Get parent XML node.
+XmlNodeRef  XmlNode_getParent(struct XmlNode * node);
 
-    //! Returns content of this node.
-    String XmlNode_getContent(struct XmlNode * node);
+//! Returns content of this node.
+String XmlNode_getContent(struct XmlNode * node);
 
-    //! Returns line number for XML tag.
-    int XmlNode_getLine(struct XmlNode * node);
-    //! Set line number in xml.
-    void XmlNode_setLine(struct XmlNode * node, int line );
+//! Returns line number for XML tag.
+int XmlNode_getLine(struct XmlNode * node);
+//! Set line number in xml.
+void XmlNode_setLine(struct XmlNode * node, int line );
 
-    //! Returns XML of this node and sub nodes.
-    String XmlNode_getXML(struct XmlNode * node);
-    void XmlNode_toFile(struct XmlNode *node, const char *fileName);
-    //! Get value of node.
-    void XmlNode_getValue(struct XmlNode * node, String *value ) ;
-    void XmlNode_getValuent(struct XmlNode * node, int *value ) ;
-    //void getValue( float &value ) const;
-    //void getValue(struct XmlNode * node, bool &value ) const { int v; getValue(v); value = (v != 0); }
+//! Returns XML of this node and sub nodes.
+String XmlNode_getXML(struct XmlNode * node);
+void XmlNode_toFile(struct XmlNode *node, const char *fileName);
+//! Get value of node.
+void XmlNode_getValue(struct XmlNode * node, String *value );
+void XmlNode_getValueInt(struct XmlNode * node, int *value );
+void XmlNode_getValueFloat(struct XmlNode *node, float *value );
 
-    //! Set value of node.
-    void XmlNode_setValue(struct XmlNode * node, const String value );
-    void XmlNode_setValueInt(struct XmlNode * node, int value );
-    //void setValue( float value );
+//! Set value of node.
+void XmlNode_setValue(struct XmlNode * node, const String value );
+void XmlNode_setValueInt(struct XmlNode * node, int value );
+//void setValue( float value );
 
-    //! Get value of sub node.
-    int XmlNode_getSubNodeValue(struct XmlNode * node, const String tag, String *value ) ;
-    int XmlNode_getSubNodeValueInt(struct XmlNode * node, const String tag, int *value ) ;
-    int XmlNode_getSubNodeValueFloat(struct XmlNode * node, const String tag,float *value ) ;
+//! Get value of sub node.
+int XmlNode_getSubNodeValue(struct XmlNode * node, const String tag, String *value );
+int XmlNode_getSubNodeValueInt(struct XmlNode * node, const String tag, int *value );
+int XmlNode_getSubNodeValueFloat(struct XmlNode * node, const String tag,float *value );
 
-    //! Set value of sub node (Create sub node if neccesarry).
-    void XmlNode_setSubNodeValue(struct XmlNode * node, const String tag, const String value );
-    void XmlNode_setSubNodeValueInt(struct XmlNode * node, const String tag, int value );
-    void XmlNode_setSubNodeValueFloat(struct XmlNode * node, const String tag, float value );
-    
+//! Set value of sub node (Create sub node if neccesarry).
+void XmlNode_setSubNodeValue(struct XmlNode * node, const String tag, const String value );
+void XmlNode_setSubNodeValueInt(struct XmlNode * node, const String tag, int value );
+void XmlNode_setSubNodeValueFloat(struct XmlNode * node, const String tag, float value );
+
 #endif // __BSXML_H

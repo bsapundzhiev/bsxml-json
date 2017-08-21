@@ -41,7 +41,7 @@ static int cpo_array_preallocate(cpo_array_t *a, asize_t elements)
     while (elements >= newmax) {
         newmax = (newmax + 1);
     }
-	
+
     newv = malloc(newmax * a->elem_size);
 
     if (newv == NULL) {

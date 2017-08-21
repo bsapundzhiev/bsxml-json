@@ -8,15 +8,14 @@
  * your option) any later version.
  *
  */
- 
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdarg.h>
 #include "bsstr.h"
 
-struct bsstr
-{
+struct bsstr {
     char *string;
     size_t length;
     size_t capacity;
@@ -34,7 +33,7 @@ bsstr *bsstr_create(const char *data)
 
     bsstr_init(str);
     if (data) {
-       bsstr_add(str, data);
+        bsstr_add(str, data);
     }
     return str;
 }
@@ -72,14 +71,14 @@ void bsstr_add(bsstr* str, const char* string)
     if (bsstr_realloc(str, len)) {
         strcpy(str->string + str->length, string);
         str->length += len;
-        str->string[str->length] = '\0';        
+        str->string[str->length] = '\0';
     }
 }
 
 /*based on snprintf man */
 void bsstr_printf(bsstr* buf, char* fmt, ...)
 {
-    int size = STRING_BLOCK_SIZE;  
+    int size = STRING_BLOCK_SIZE;
     va_list ap;
     int end = buf->length;
     bsstr *p = bsstr_realloc(buf, size);
@@ -95,10 +94,10 @@ void bsstr_printf(bsstr* buf, char* fmt, ...)
             buf->length = end + n;
             return;
         }
-        if (n > -1)     
-            size = n + 1; 
-        else          
-            size *= 2; 
+        if (n > -1)
+            size = n + 1;
+        else
+            size *= 2;
         if((p = bsstr_realloc(buf, size)) == NULL ) {
             return;
         }
@@ -107,7 +106,7 @@ void bsstr_printf(bsstr* buf, char* fmt, ...)
 
 void bsstr_addchr(bsstr* str, char ch)
 {
-    char s[] = {ch,'\0'}; 
+    char s[] = {ch,'\0'};
     bsstr_add(str, s);
 }
 

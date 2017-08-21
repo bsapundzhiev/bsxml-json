@@ -89,12 +89,12 @@ struct ctmr t;
 #define CLK_ON(x) \
 	clock_init(x); \
 	clock_on(x); \
- 
+
 #define CLK_OFF(x)\
 	set_color();\
 	printf("[%s] end in %ld ms\n",__FUNCTION__, clock_off(x));\
 	restore_color();\
- 
+
 static const char xml[] = "<?xml version=\"1.0\"?>\n\
 <A:propfind xmlns:A=\"DAV:\">\n\
     <A:prop name=\"test\">\n\
@@ -190,7 +190,7 @@ void find_test()
                 char *attr = XmlNode_getAttributeValue(child, "name");
                 printf("found attr %s -> %s\n", "name", attr);
 
-                if (attr && !strcmp ( attr  , "test") ) {
+                if (attr && !strcmp ( attr, "test") ) {
                     printf("found \n");
                 }
             }
@@ -255,7 +255,7 @@ void json_parser_test()
 void json_create_test ()
 {
     JsonNode *root = JsonNode_Create();
-    JsonNode *address , *phone, *phoneType;
+    JsonNode *address, *phone, *phoneType;
     CLK_ON(&t);
     JsonNode_setPair(root, "firstName", "John" );
     JsonNode_setPair(root, "lastName", "Smith" );
@@ -337,7 +337,7 @@ void array_test()
 int main(int argc, char **argv)
 {
 #ifdef _ARRAY_TEST
-	array_test();
+    array_test();
 #else
     file_test(argc,argv);
     create_test ();
