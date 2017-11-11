@@ -12,7 +12,7 @@
 #define _BSSTRING_H
 
 #define isNullorEmpty(str)\
-	(str == NULL || !strlen(str))
+	(str == NULL || str[0] == '\0')
 
 #define isAlpha(c)\
 	((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'))
@@ -22,7 +22,6 @@
 
 #define isAlphaNumeric(c)\
 	(isDigit(c) || isAlpha(c))
-
 
 typedef struct bsstr bsstr;
 
