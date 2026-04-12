@@ -30,7 +30,6 @@ XmlNode * XmlNode_Create(const String tag)
     if (!node) return NULL;
     node->m_tag = strdup( tag );
     node->m_type = NODE_ROOT;
-    node->m_parent = 0;
     node->m_content = NULL;
     node->m_childs = cpo_array_create(XMLTREE_CHILDSIZE, sizeof(struct XmlNode));
     node->m_attributes = cpo_array_create(XMLTREE_ATTRSIZE, sizeof( struct XmlAttribute) );
@@ -59,7 +58,7 @@ asize_t XmlNode_getChildCount(struct XmlNode * node)
 
 XmlNodeRef XmlNode_getParent(struct XmlNode * node)
 {
-    return node->m_parent;
+    return NULL;
 }
 
 String XmlNode_getContent(struct XmlNode * node)
@@ -187,7 +186,6 @@ XmlNode * XmlNode_createChild(struct XmlNode *node, const String tag, const Stri
     child->m_tag = strdup( tag );
     child->m_type = NODE_CHILD;
     child->m_content = NULL;
-    child->m_parent = node;
     if (text) {
         XmlNode_setValue(child, text );
     }
@@ -202,7 +200,6 @@ void XmlNode_addChild(struct XmlNode *node, const XmlNodeRef child )
     XmlNodeRef ref = cpo_array_push( node->m_childs );
     if (ref) {
         *ref = *child;
-        ref->m_parent = node;
     }
 }
 

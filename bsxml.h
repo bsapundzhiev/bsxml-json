@@ -62,8 +62,6 @@ struct XmlNode {
     String m_tag;
     //! Content of XML node.
     String m_content;
-    //! Parent XML node.
-    struct XmlNode *m_parent;
     //Xml childs
     XmlNodes *m_childs;
     //! Xml node attributes.

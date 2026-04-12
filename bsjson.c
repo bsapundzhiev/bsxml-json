@@ -53,7 +53,6 @@ JsonNode * JsonNode_Create()
 
     node->m_type = JSON_ROOT;
     node->m_name = NULL;
-    node->m_parent = NULL;
     node->m_pairs = cpo_array_create(4, sizeof(JsonPair));
     node->m_childs =  cpo_array_create(4, sizeof(JsonNode));
     return node;
@@ -63,7 +62,6 @@ JsonNode * JsonNode_createChild(JsonNode * node, String name, int type)
 {
     JsonNode * child = (JsonNode *)cpo_array_push(node->m_childs);
     child->m_type = type;
-    child->m_parent = node;
     child->m_name = (name != NULL) ? strdup(name) : NULL;
     child->m_pairs = cpo_array_create(4, sizeof(JsonPair));
     child->m_childs =  cpo_array_create(4, sizeof(JsonNode));

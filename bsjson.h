@@ -49,7 +49,6 @@ struct JsonPair {
 struct JsonNode {
     int m_type;
     String m_name;
-    JsonNode * m_parent;
     cpo_array_t *m_pairs;
     cpo_array_t *m_childs;
 };
