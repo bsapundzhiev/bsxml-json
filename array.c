@@ -54,6 +54,9 @@ static int cpo_array_preallocate(cpo_array_t *a, asize_t elements)
         free(a->v);
 
     a->v = newv;
+    /* zero-initialize the newly allocated region to avoid garbage in new elements */
+    memset((unsigned char*) a->v + a->elem_size * a->max, 0,
+           (newmax - a->max) * a->elem_size);
     a->max = newmax;
     return 0;
 }

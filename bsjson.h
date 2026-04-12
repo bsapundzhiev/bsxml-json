@@ -26,7 +26,7 @@
 #endif
 
 enum {JSON_NOK, JSON_OK };
-enum {JSON_NONE, JSON_ROOT, JSON_OBJ, JSON_ARRAY } eNodeTypes;
+enum {JSON_NONE, JSON_ROOT, JSON_OBJ, JSON_ARRAY };
 
 #define NAME_ANON NULL
 
