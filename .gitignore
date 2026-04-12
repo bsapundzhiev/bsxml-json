@@ -4,6 +4,7 @@
 /test/
 /obj/
 /ipch/
+/.github/
 *.suo
 *.vcxproj.user
 *.lib

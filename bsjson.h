@@ -27,6 +27,7 @@
 
 enum {JSON_NOK, JSON_OK };
 enum {JSON_NONE, JSON_ROOT, JSON_OBJ, JSON_ARRAY };
+enum {JSON_VALUE_STRING = 0, JSON_VALUE_NUMBER, JSON_VALUE_BOOL, JSON_VALUE_NULL};
 
 #define NAME_ANON NULL
 
@@ -44,6 +45,7 @@ typedef struct JsonPair JsonPair;
 struct JsonPair {
     String key;
     String value;
+    int type;  /* JSON_VALUE_STRING, JSON_VALUE_NUMBER, JSON_VALUE_BOOL, JSON_VALUE_NULL */
 };
 
 struct JsonNode {
@@ -77,6 +79,8 @@ JsonNode * JsonNode_getChild(JsonNode *node, asize_t index);
 JsonPair * JsonNode_getPair(JsonNode *node, asize_t index);
 String JsonNode_getPairValue(JsonNode *node, const String key);
 int JsonNode_getPairValueInt(JsonNode *node, const String key);
+double JsonNode_getPairValueDouble(JsonNode *node, const String key);
+int JsonNode_getPairValueType(JsonNode *node, const String key);
 void JsonNode_delete(JsonNode *node);
 void JsonNode_deleteTree(JsonNode *root);
 String JsonNode_getJSON(JsonNode *node);

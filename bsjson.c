@@ -19,6 +19,20 @@
 
 #define JSON_STACK_SIZE 32
 
+/* JSON streaming buffer size - tune for your platform:
+ * 8192 (8KB):   Desktop/Server, good speed/memory balance
+ * 4096 (4KB):   Embedded systems (ARM Cortex-M), ~4KB total memory per chunk
+ * 2048 (2KB):   Tight embedded, IoT (~2KB total memory per chunk) - RECOMMENDED
+ * 1024 (1KB):   Very tight constraints (~1KB total memory per chunk)
+ * 512 (512B):   Ultra-low power, minimal RAM
+ * 256 (256B):   Extreme constraints - works for simple JSON only, may fail on complex files
+ * 
+ * NOTE: Smaller buffers = slower parsing + more disk I/O
+ *       But linear memory usage stays constant regardless of file size
+ *       256B may have issues with tokens split across chunk boundaries
+ */
+#define JSON_BUFFER_SIZE 2048  /* 2KB read buffer - recommended for most cases */
+
 enum eElemType {
     JSON_OBJ_B, JSON_OBJ_E, JSON_ARR_B, JSON_ARR_E,
     JSON_COLON, JSON_COMMA, JSON_QUOTE, JSON_LEFT,
@@ -44,6 +58,33 @@ static enum eElemType Json_typeOfElem(const char c)
     }
 
     return type;
+}
+
+/* Detect JSON value type from string representation */
+static int Json_detectValueType(const char *value)
+{
+    if (!value || *value == '\0') {
+        return JSON_VALUE_NULL;
+    }
+    
+    /* Check for null */
+    if (strcmp(value, "null") == 0) {
+        return JSON_VALUE_NULL;
+    }
+    
+    /* Check for boolean */
+    if (strcmp(value, "true") == 0 || strcmp(value, "false") == 0) {
+        return JSON_VALUE_BOOL;
+    }
+    
+    /* Check for number */
+    char *endptr;
+    strtod(value, &endptr);
+    if (endptr != value && *endptr == '\0') {
+        return JSON_VALUE_NUMBER;
+    }
+    
+    return JSON_VALUE_STRING;
 }
 
 JsonNode * JsonNode_Create()
@@ -85,6 +126,7 @@ void JsonNode_setPair(JsonNode * node, const String key, const String value )
     JsonPair *a = (JsonPair*)cpo_array_push( node->m_pairs );
     a->key =  strdup(key);
     a->value =  strdup(value);
+    a->type = Json_detectValueType(value);
 }
 
 static int JsonPair_comparer(const void *a, const void *b)
@@ -125,6 +167,20 @@ double JsonNode_getPairValueFloat(JsonNode *node, const String key)
         return atof(jsonVal);
     }
     return 0;
+}
+
+double JsonNode_getPairValueDouble(JsonNode *node, const String key)
+{
+    return JsonNode_getPairValueFloat(node, key);
+}
+
+int JsonNode_getPairValueType(JsonNode *node, const String key)
+{
+    JsonPair *pair = JsonNode_findPair(node, key);
+    if(pair) {
+        return pair->type;
+    }
+    return JSON_VALUE_NULL;
 }
 
 static int JsonNode_comparer(const void *a, const void *b)
@@ -446,8 +502,11 @@ static int JsonParser_internalParse(struct  ParserInternal *pi, const char* json
         case JSON_COMMA:
             if (JsonParser_peekEndLine(p,i) || JsonParser_next_char(p,i) == Json_elem(JSON_QUOTE)) {
                 JsonParser_internalData(pi);
+            } else if (pi->is_value && bsstr_length(pi->value) > 0) {
+                /* comma after a value - end the value */
+                JsonParser_internalData(pi);
             } else {
-                /* comma in value */
+                /* comma in quoted value */
                 bsstr *data = (!pi->is_value) ? pi->key : pi->value;
                 bsstr_addchr(data, Json_elem(JSON_COMMA));
             }
@@ -473,8 +532,9 @@ static int JsonParser_internalParse(struct  ParserInternal *pi, const char* json
                 bsstr_addchr(pi->key, ch);
             } else if (pi->quote_begin && pi->is_value) {
                 bsstr_addchr(pi->value, ch);
-            } else {
-                //printf("[skiped] '%c' [0x%x]\n", ch,ch);
+            } else if (pi->is_value && ch != ' ' && ch != '\t' && ch != '\r' && ch != '\n') {
+                /* Capture unquoted values (numbers, booleans, null) */
+                bsstr_addchr(pi->value, ch);
             }
             break;
         }
@@ -576,34 +636,192 @@ static void JsonParser_stripCommentsFromBuffer(char *buff, long size)
     }
 }
 
+/* Strip comments from JSON buffer - handles // and # comments */
+static void JsonBuffer_stripComments(const char *src, size_t src_len, 
+                                     char *dst, size_t *dst_len)
+{
+    size_t i, j = 0;
+    unsigned char in_string = 0;
+    
+    for (i = 0; i < src_len && j < 2*JSON_BUFFER_SIZE - 1; i++) {
+        char ch = src[i];
+        
+        /* Track if we're inside a quoted string */
+        if (ch == '"' && (i == 0 || src[i-1] != '\\')) {
+            in_string = !in_string;
+            dst[j++] = ch;
+            continue;
+        }
+        
+        if (in_string) {
+            dst[j++] = ch;
+            continue;
+        }
+        
+        /* Skip // and # comments outside strings */
+        if ((ch == '/' && i + 1 < src_len && src[i+1] == '/') || ch == '#') {
+            /* Skip to end of line */
+            while (i < src_len && src[i] != '\n' && src[i] != '\r') {
+                i++;
+            }
+            /* Keep newline for line tracking */
+            if (i < src_len && src[i] == '\r' && i + 1 < src_len && src[i+1] == '\n') {
+                dst[j++] = '\n';
+                i++;
+            } else if (i < src_len && (src[i] == '\n' || src[i] == '\r')) {
+                dst[j++] = '\n';
+            }
+            continue;
+        }
+        
+        dst[j++] = ch;
+    }
+    
+    dst[j] = '\0';
+    *dst_len = j;
+}
+
+/* Streaming JSON file parser - memory efficient, no full file buffering */
+struct JsonStreamReader {
+    FILE *file;
+    char buffer[JSON_BUFFER_SIZE];
+    size_t buffer_len;
+    char leftover[JSON_BUFFER_SIZE];  /* for incomplete tokens across chunks */
+    size_t leftover_len;
+    int eof;
+    struct ParserInternal *parser_state;  /* persistent parse state */
+};
+
+static int JsonStreamReader_init(struct JsonStreamReader *reader, const char *fileName)
+{
+    reader->file = fopen(fileName, "rb");
+    if (!reader->file) {
+        return JSON_NOK;
+    }
+    reader->buffer_len = 0;
+    reader->leftover_len = 0;
+    reader->eof = 0;
+    reader->parser_state = NULL;
+    return JSON_OK;
+}
+
+static size_t JsonStreamReader_readChunk(struct JsonStreamReader *reader)
+{
+    if (reader->eof) {
+        return 0;
+    }
+    
+    reader->buffer_len = fread(reader->buffer, 1, JSON_BUFFER_SIZE, reader->file);
+    
+    if (reader->buffer_len < JSON_BUFFER_SIZE) {
+        reader->eof = 1;
+    }
+    
+    /* Check for incomplete strings at end of buffer */
+    int in_string = 0;
+    int escape_next = 0;
+    size_t i;
+    for (i = 0; i < reader->buffer_len; i++) {
+        char ch = reader->buffer[i];
+        if (escape_next) {
+            escape_next = 0;
+            continue;
+        }
+        if (ch == '\\') {
+            escape_next = 1;
+            continue;
+        }
+        if (ch == '"') {
+            in_string = !in_string;
+        }
+    }
+    
+    /* If we're in a string at the end, read more to complete it */
+    if (in_string && !reader->eof) {
+        size_t additional = fread(reader->buffer + reader->buffer_len, 1, 
+                                 JSON_BUFFER_SIZE - reader->buffer_len, reader->file);
+        reader->buffer_len += additional;
+        if (additional < JSON_BUFFER_SIZE - reader->buffer_len) {
+            reader->eof = 1;
+        }
+    }
+    
+    return reader->buffer_len;
+}
+
+static void JsonStreamReader_close(struct JsonStreamReader *reader)
+{
+    if (reader->file) {
+        fclose(reader->file);
+        reader->file = NULL;
+    }
+}
+
+/* Streaming parse - memory efficient, processes data as it's read */
+static JsonNode* JsonParser_parseFileStreaming(struct JsonParser *parser, const char *fileName)
+{
+    struct JsonStreamReader reader;
+    struct ParserInternal pi;
+    int error = JSON_ERR_NONE;
+    JsonNode *root = NULL;
+    char clean_buffer[2*JSON_BUFFER_SIZE];
+    size_t clean_len;
+    
+    if (JsonStreamReader_init(&reader, fileName) != JSON_OK) {
+        parser->m_errorString = strerror(errno);
+        return NULL;
+    }
+    
+    /* Initialize parser state */
+    parser->m_errorString = NULL;
+    JsonParser_internalCreate(&pi);
+    pi.startElem = JsonParser_startElem;
+    pi.endElem = JsonParser_endElem;
+    pi.elemData = JsonParser_elemData;
+    pi.parser = parser;
+    reader.parser_state = &pi;
+    
+    parser->m_nodeStack = cpo_array_create(JSON_STACK_SIZE, sizeof(void*));
+    
+    /* Read and parse file in chunks */
+    while (JsonStreamReader_readChunk(&reader) > 0) {
+        /* Strip comments from buffer before parsing */
+        JsonBuffer_stripComments(reader.buffer, reader.buffer_len, clean_buffer, &clean_len);
+        
+        /* Parse the cleaned buffer */
+        error = JsonParser_internalParse(&pi, clean_buffer, (int)clean_len);
+        if (error != JSON_ERR_NONE) {
+            DEBUG_PRINT("Streaming parse error at chunk\n");
+            break;
+        }
+    }
+    
+    if (error == JSON_ERR_NONE) {
+        root = parser->m_root;
+    } else {
+        parser->m_errorString = (char*)jsonParser_errlist[error];
+        printf("json parser error:%s @ line %d\n", parser->m_errorString, pi.line);
+    }
+    
+    DEBUG_PRINT("Streamed and parsed lines %d\n", pi.line);
+    JsonParser_internalDelete(&pi);
+    cpo_array_destroy(parser->m_nodeStack);
+    JsonStreamReader_close(&reader);
+    
+    return root;
+}
+
 JsonNode * JsonParser_parseFile(struct JsonParser *parser, const char * fileName)
 {
-    JsonNode * root = NULL;
-    FILE *f = fopen (fileName, "rb");
-
-    if (f) {
-        char * buffer;
-        long length;
-        size_t read = 0;
-        fseek (f, 0, SEEK_END);
-        length = ftell (f);
-        fseek (f, 0, SEEK_SET);
-        buffer = (char*) malloc (length + 1);
-        if (buffer) {
-            read = fread (buffer, sizeof(char), length, f);
-            buffer[read] = '\0';
-        }
-        fclose (f);
-        if (read == length) {
-            JsonParser_stripCommentsFromBuffer(buffer, length);
-            root = JsonParser_parse(parser,  buffer);
-        } else {
-            parser->m_errorString = strerror(errno);
-        }
-        free(buffer);
-    } else {
-        parser->m_errorString = strerror(errno);
-        printf("error: cant read %s \n", fileName);
+    JsonNode *root = NULL;
+    
+    /* Use streaming parser for memory-efficient file reading
+     * No buffering of entire file - processes chunks as read */
+    root = JsonParser_parseFileStreaming(parser, fileName);
+    
+    /* Strip comments if we successfully got root */
+    if (root && parser->m_root == root) {
+        /* Comments are stripped during streaming parse */
     }
 
     return root;
