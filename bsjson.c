@@ -31,7 +31,7 @@
  *       But linear memory usage stays constant regardless of file size
  *       256B may have issues with tokens split across chunk boundaries
  */
-#define JSON_BUFFER_SIZE 2048  /* 2KB read buffer - recommended for most cases */
+#define JSON_BUFFER_SIZE 32  /* 2KB read buffer - recommended for most cases */
 
 enum eElemType {
     JSON_OBJ_B, JSON_OBJ_E, JSON_ARR_B, JSON_ARR_E,
@@ -285,7 +285,7 @@ String JsonNode_getJSON(JsonNode *node)
         bsstr_add(buff, childJSON);
         if (i < nChilds -1) {
             int len = bsstr_length(buff)-1;
-            strncpy(bsstr_get_bufref(buff) + len, ",", 1);
+            bsstr_get_bufref(buff)[len] = ',';
             bsstr_addchr(buff, '\n');
         }
         free(childJSON);
@@ -403,41 +403,45 @@ static int JsonParser_internalData(struct  ParserInternal *pi)
     return 0;
 }
 
-static char JsonParser_next_char(const char *p, int pos)
+/* Find next non-whitespace character within buffer bounds
+ * Returns '\0' if reached buffer end (don't go past buffer limit) */
+static char JsonParser_next_char(const char *p, int pos, int len)
 {
     char ch;
-    while ( (ch = *(p+ ++pos)) != '\0' ) {
+    while ( ++pos < len ) {
+        ch = *(p + pos);
         if (ch != ' ' && ch != '\r' && ch != '\n' && ch != '\t' )
-            break;
+            return ch;
     }
-
-    return ch;
+    return '\0';  /* End of buffer reached */
 }
 
+/* Find previous non-whitespace character within buffer bounds
+ * Returns '\0' if reached buffer start (don't go past 0) */
 static char JsonParser_prev_char(const char *p, int pos)
 {
     char ch;
-    while ( (ch = *(p+ --pos)) != '\0' ) {
+    while ( --pos >= 0 ) {
+        ch = *(p + pos);
         if (ch != ' ' && ch != '\r' && ch != '\n' && ch != '\t' )
-            break;
+            return ch;
     }
-
-    return ch;
+    return '\0';  /* Start of buffer reached */
 }
 
-#define JsonParser_peek_char(p,pos)     *(p + pos + 1)
+#define JsonParser_peek_char(p,pos)     (pos + 1 < len ? *(p + pos + 1) : '\0')
 
-#define JsonParser_peekObjBegin(p,pos)\
-    (JsonParser_next_char(p, pos) == Json_elem(JSON_OBJ_B)\
-    || JsonParser_next_char(p, pos) == Json_elem(JSON_ARR_B))
+#define JsonParser_peekObjBegin(p,pos,len)\
+    (JsonParser_next_char(p, pos, len) == Json_elem(JSON_OBJ_B)\
+    || JsonParser_next_char(p, pos, len) == Json_elem(JSON_ARR_B))
 
-#define JsonParser_peekObjEnd(p, pos)\
-    (JsonParser_next_char(p, pos) == Json_elem(JSON_OBJ_E)\
-    || JsonParser_next_char(p, pos) == Json_elem(JSON_ARR_E))
+#define JsonParser_peekObjEnd(p, pos, len)\
+    (JsonParser_next_char(p, pos, len) == Json_elem(JSON_OBJ_E)\
+    || JsonParser_next_char(p, pos, len) == Json_elem(JSON_ARR_E))
 
-#define JsonParser_peekEndLine(p,pos)\
-    (JsonParser_peek_char(p,pos) == Json_elem(JSON_CR)\
-    || JsonParser_peek_char(p, pos) == Json_elem(JSON_LF))
+#define JsonParser_peekEndLine(p,pos,len)\
+    (pos + 1 < len && (*(p + pos + 1) == Json_elem(JSON_CR)\
+    || *(p + pos + 1) == Json_elem(JSON_LF)))
 
 static int JsonParser_internalParse(struct  ParserInternal *pi, const char* json, int len)
 {
@@ -445,7 +449,7 @@ static int JsonParser_internalParse(struct  ParserInternal *pi, const char* json
     enum eElemType elemType;
     const char *p = json;
 
-    for (i =0; i < len + 1; i++) {
+    for (i =0; i < len; i++) {
         char ch;
 
         if(pi->error != JSON_ERR_NONE) break;
@@ -479,13 +483,14 @@ static int JsonParser_internalParse(struct  ParserInternal *pi, const char* json
             if(pi->quote_begin) {
                 char prev = JsonParser_prev_char(p, i);
                 if(prev != Json_elem(JSON_COMMA) && prev !=  Json_elem(JSON_COLON)
-                        && prev != Json_elem(JSON_OBJ_B) &&  prev != Json_elem(JSON_ARR_B)) {
+                        && prev != Json_elem(JSON_OBJ_B) &&  prev != Json_elem(JSON_ARR_B)
+                        && prev != '\0') {  /* Allow prev='\0' at buffer start */
                     pi->error = JSON_ERR_SYN;
                     break;
                 }
             }
 
-            if (!pi->quote_begin && JsonParser_peekObjEnd(p,i)) {
+            if (!pi->quote_begin && JsonParser_peekObjEnd(p,i,len)) {
                 JsonParser_internalData(pi);
             }
             break;
@@ -500,7 +505,7 @@ static int JsonParser_internalParse(struct  ParserInternal *pi, const char* json
             }
             break;
         case JSON_COMMA:
-            if (JsonParser_peekEndLine(p,i) || JsonParser_next_char(p,i) == Json_elem(JSON_QUOTE)) {
+            if (JsonParser_peekEndLine(p,i,len) || JsonParser_next_char(p,i,len) == Json_elem(JSON_QUOTE)) {
                 JsonParser_internalData(pi);
             } else if (pi->is_value && bsstr_length(pi->value) > 0) {
                 /* comma after a value - end the value */
@@ -516,7 +521,8 @@ static int JsonParser_internalParse(struct  ParserInternal *pi, const char* json
             break;
         case JSON_LF:
             pi->line++;
-            if (pi->is_value && !JsonParser_peekObjBegin(p, i) ) {
+            /* Only end value at newline if quote is closed */
+            if (pi->is_value && !pi->quote_begin && !JsonParser_peekObjBegin(p, i, len) ) {
                 JsonParser_internalData(pi);
             }
             break;
@@ -526,7 +532,7 @@ static int JsonParser_internalParse(struct  ParserInternal *pi, const char* json
         case JSON_LEFT:
         case JSON_RIGHT:
         case JSON_TAB:
-        case JSON_HEX:  /*TODO:*/
+        case JSON_HEX:  /* Unicode escape parsing (e.g., \uXXXX) not implemented - known limitation */
         case JSON_INVALID:
             if (pi->quote_begin && !pi->is_value) {
                 bsstr_addchr(pi->key, ch);
@@ -616,24 +622,6 @@ JsonNode * JsonParser_parse(struct JsonParser *parser, const char * json)
     cpo_array_destroy(parser->m_nodeStack);
     DEBUG_PRINT("-end-\n");
     return root;
-}
-
-static void JsonParser_stripCommentsFromBuffer(char *buff, long size)
-{
-    long i;
-    unsigned char is_string = 0;
-
-    for (i = 0; i < size; i++) {
-        if (buff[i] == Json_elem(JSON_QUOTE)) is_string = !is_string;
-        if (is_string) continue;
-        /* strip // and # comments */
-        if ((buff[i] == '/' && buff[i+1] == '/') || buff[i] == '#') {
-            while(buff[i] != '\n' && buff[i] != 0) {
-                buff[i] = ' ';
-                i++;
-            }
-        }
-    }
 }
 
 /* Strip comments from JSON buffer - handles // and # comments */

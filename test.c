@@ -110,45 +110,6 @@ static const char xml[] = "<?xml version=\"1.0\"?>\n\
     </A:prop>\n\
 </A:propfind>\n";
 
-static const char json [] =
-    "{\n\
-    \"firstName\": \"John\",\n\
-    \"lastName\": \"Smith\",\n\
-    \"age\": 25,\n\
-    \"address\": {\n\
-        \"streetAddress\": \"21 2nd Street\",\n\
-        \"city\": \"New York\",\n\
-        \"state\": \"NY\",\n\
-        \"postalCode\": \"10021\"\n\
-    },\n\
-    \"phoneNumber\": [\n\
-        {\n\
-            \"type\": \"home\",\n\
-            \"number\": \"212 555-1234\"\n\
-        },\n\
-        {\n\
-            \"type\": \"fax\",\n\
-			\"number\": \"646 555-4567\"\n\
-        }\n\
-    ]\n\
-}\n";
-
-static const char json2 [] =
-    "{\n\
-	 \"address\": {\n\
-        \"streetAddress\": \"21 2nd Street\",\n\
-    },\n\
-	\"GlossSeeAlso\": [\n\
-		{ \"servlet-name\": \"cofaxCDS\",\n\
-			\"init-param\": {\n\
-        		\"configGlossary:installationAt\": \"Philadelphia, PA\"\n\
-        	},\n\
-        },\n\
-		\"GML\",\n\
-		\"XML\"\n\
-	]\n\
-}\n";
-
 void printXml( XmlNodeRef node )
 {
     String str = XmlNode_getXML(node);
