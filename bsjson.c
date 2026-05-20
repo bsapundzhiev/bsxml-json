@@ -27,11 +27,17 @@
  * 512 (512B):   Ultra-low power, minimal RAM
  * 256 (256B):   Extreme constraints - works for simple JSON only, may fail on complex files
  * 
+ * UNICODE SUPPORT REQUIREMENTS:
+ * - Single escape \uXXXX = 6 bytes
+ * - UTF-16 surrogate pair \uXXXX\uYYYY = 12 bytes (for emoji, etc.)
+ * - Minimum buffer size: 12 bytes (for Unicode emoji support)
+ * - Recommended: 2048+ bytes for production use
+ * - Note: Buffers < 12 bytes WILL FAIL parsing files with surrogate pairs (emoji)
+ * 
  * NOTE: Smaller buffers = slower parsing + more disk I/O
  *       But linear memory usage stays constant regardless of file size
- *       256B may have issues with tokens split across chunk boundaries
  */
-#define JSON_BUFFER_SIZE 32  /* 2KB read buffer - recommended for most cases */
+#define JSON_BUFFER_SIZE 32 /* Minimum: 12 for Unicode; Recommended: 2048+ for production */
 
 enum eElemType {
     JSON_OBJ_B, JSON_OBJ_E, JSON_ARR_B, JSON_ARR_E,
@@ -323,6 +329,7 @@ static void JsonParser_internalCreate(struct ParserInternal *pi)
 {
     pi->error = JSON_ERR_NONE;
     pi->line = 0;
+    pi->quote_begin = pi->is_value = 0;
     pi->key = bsstr_create("");
     pi->value = bsstr_create("");
     pi->stack.v = calloc(JSON_STACK_SIZE, sizeof(char*));
@@ -429,7 +436,254 @@ static char JsonParser_prev_char(const char *p, int pos)
     return '\0';  /* Start of buffer reached */
 }
 
-#define JsonParser_peek_char(p,pos)     (pos + 1 < len ? *(p + pos + 1) : '\0')
+static int JsonParser_hexDigit(char ch)
+{
+    if (ch >= '0' && ch <= '9') return ch - '0';
+    if (ch >= 'a' && ch <= 'f') return ch - 'a' + 10;
+    if (ch >= 'A' && ch <= 'F') return ch - 'A' + 10;
+    return -1;
+}
+
+static int JsonParser_parseUnicodeEscape(const char *p, int len, int pos, unsigned *codepoint)
+{
+    unsigned cp = 0;
+    int digit;
+
+    if (pos + 4 > len) return -1;  /* Need 4 hex digits */
+    for (int j = 0; j < 4; j++) {
+        digit = JsonParser_hexDigit(p[pos + j]);
+        if (digit < 0) return -1;
+        cp = (cp << 4) | (unsigned)digit;
+    }
+
+    *codepoint = cp;
+    return 0;
+}
+
+/* Handle surrogate pairs and validate Unicode codepoint */
+static int JsonParser_decodeSurrogatePair(const char *p, int len, int pos, unsigned *codepoint)
+{
+    if (*codepoint >= 0xD800 && *codepoint <= 0xDBFF) {
+        /* High surrogate - must be followed by low surrogate */
+        if (pos + 6 > len) {
+            return -1;  /* Not enough bytes for low surrogate */
+        }
+        if (p[pos] != '\\' || p[pos + 1] != 'u') {
+            return -1;  /* Missing low surrogate */
+        }
+        unsigned low;
+        if (JsonParser_parseUnicodeEscape(p, len, pos + 2, &low) != 0
+            || low < 0xDC00 || low > 0xDFFF) {
+            return -1;
+        }
+        *codepoint = 0x10000 + ((((*codepoint) - 0xD800) << 10) | (low - 0xDC00));
+        return 6;  /* consumed 6 chars (\uXXXX\uYYYY) */
+    } else if (*codepoint >= 0xDC00 && *codepoint <= 0xDFFF) {
+        return -1;  /* Unpaired low surrogate */
+    }
+    return 0;  /* No surrogate pair, consumed 0 extra chars */
+}
+
+static int JsonParser_encodeUtf8(bsstr *dst, unsigned codepoint)
+{
+    if (codepoint <= 0x7F) {
+        bsstr_addchr(dst, (char)codepoint);
+    } else if (codepoint <= 0x7FF) {
+        bsstr_addchr(dst, (char)(0xC0 | (codepoint >> 6)));
+        bsstr_addchr(dst, (char)(0x80 | (codepoint & 0x3F)));
+    } else if (codepoint <= 0xFFFF) {
+        bsstr_addchr(dst, (char)(0xE0 | (codepoint >> 12)));
+        bsstr_addchr(dst, (char)(0x80 | ((codepoint >> 6) & 0x3F)));
+        bsstr_addchr(dst, (char)(0x80 | (codepoint & 0x3F)));
+    } else if (codepoint <= 0x10FFFF) {
+        bsstr_addchr(dst, (char)(0xF0 | (codepoint >> 18)));
+        bsstr_addchr(dst, (char)(0x80 | ((codepoint >> 12) & 0x3F)));
+        bsstr_addchr(dst, (char)(0x80 | ((codepoint >> 6) & 0x3F)));
+        bsstr_addchr(dst, (char)(0x80 | (codepoint & 0x3F)));
+    } else {
+        return -1;
+    }
+
+    return 0;
+}
+
+static int JsonParser_appendEscapeSequence(bsstr *dest, char esc_char)
+{
+    /* Process a JSON escape sequence by appending the unescaped character.
+     * 
+     * Args:
+     *   dest:     Destination string to append to (e.g., pi->value or pi->key)
+     *   esc_char: Character after backslash (e.g., 'n' for \\n, 't' for \\t)
+     * 
+     * Returns:
+     *   0 if esc_char is a valid JSON escape sequence
+     *   -1 if esc_char is not a recognized escape (syntax error)
+     * 
+     * Recognized escapes: \", \\, \/, \b, \f, \n, \r, \t
+     */
+    switch (esc_char) {
+        case '"':  bsstr_addchr(dest, '"');  return 0;
+        case '\\': bsstr_addchr(dest, '\\'); return 0;
+        case '/':  bsstr_addchr(dest, '/');  return 0;
+        case 'b':  bsstr_addchr(dest, '\b'); return 0;
+        case 'f':  bsstr_addchr(dest, '\f'); return 0;
+        case 'n':  bsstr_addchr(dest, '\n'); return 0;
+        case 'r':  bsstr_addchr(dest, '\r'); return 0;
+        case 't':  bsstr_addchr(dest, '\t'); return 0;
+        default:   return -1;  /* Invalid escape sequence */
+    }
+}
+
+static int JsonParser_parseHexCodepoint(const char *buffer, size_t buf_len,
+                                         size_t pos, unsigned *out_codepoint)
+{
+    /* Parse 4 hex digits at buffer[pos..pos+3] into a Unicode codepoint.
+     * 
+     * Args:
+     *   buffer:         Input buffer containing JSON escape sequence
+     *   buf_len:        Total buffer length
+     *   pos:            Starting position (should point to first hex digit after \\u)
+     *   out_codepoint:  Output parameter for parsed codepoint value
+     * 
+     * Returns:
+     *   0 on successful parse of valid hex codepoint (0x0000-0xFFFF)
+     *   -1 if buffer too short or any character is not valid hex digit
+     */
+    if (pos + 4 > buf_len) return -1;
+    
+    unsigned cp = 0;
+    for (size_t i = 0; i < 4; i++) {
+        int digit = JsonParser_hexDigit(buffer[pos + i]);
+        if (digit < 0) return -1;
+        cp = (cp << 4) | (unsigned)digit;
+    }
+    *out_codepoint = cp;
+    return 0;
+}
+
+static int JsonParser_validateUtf16Pair(const char *buffer, size_t buf_len,
+                                       unsigned high_surrogate, size_t pos,
+                                       unsigned *out_combined_codepoint)
+{
+    /* Validate UTF-16 surrogate pair and combine into full codepoint.
+     * 
+     * If high_surrogate is in the range U+D800..DBFF (high surrogate), verify
+     * that it is immediately followed by a low surrogate (U+DC00..DFFF) and
+     * combine them into a single Unicode codepoint (U+10000 and above).
+     * 
+     * Returns:
+     *   0 if high_surrogate is NOT a surrogate (regular codepoint)
+     *   6 if valid pair found (indicates advance by 6 bytes: \uHIGH\uLOW)
+     *   -1 on error: buffer too short, missing \u, invalid low surrogate
+     */
+    if (high_surrogate < 0xD800 || high_surrogate > 0xDBFF) {
+        return 0;  /* Not a surrogate */
+    }
+
+    /* High surrogate found - must be followed by \uXXXX with low surrogate */
+    if (pos + 6 > buf_len) return -1;  /* Not enough bytes */
+    if (buffer[pos] != '\\' || buffer[pos + 1] != 'u') return -1;  /* Missing \u */
+
+    unsigned low = 0;
+    if (JsonParser_parseHexCodepoint(buffer, buf_len, pos + 2, &low) != 0) return -1;
+    if (low < 0xDC00 || low > 0xDFFF) return -1;  /* Invalid low surrogate */
+
+    /* Combine surrogates into codepoint: (high - 0xD800) << 10 | (low - 0xDC00) + 0x10000 */
+    *out_combined_codepoint = 0x10000 + (((high_surrogate - 0xD800) << 10) | (low - 0xDC00));
+    return 6;  /* Consumed \uXXXX\uYYYY */
+}
+
+static size_t JsonStreamReader_findSafeChunkLength(const char *buffer, size_t len,
+                                                   int initial_in_string,
+                                                   int *out_in_string)
+{
+    /* Scan buffer to identify safe substring for parsing.
+     * 
+     * In streaming JSON parsing, escape sequences may span chunk boundaries (e.g., buffer
+     * ends with "\u04" and next chunk contains "30" for the full "\u0430" codepoint).
+     * This function detects such incomplete escapes and returns how many bytes can safely
+     * be parsed without risk of truncating an escape mid-sequence.
+     * 
+     * Args:
+     *   buffer:             Input JSON chunk to scan
+     *   len:                Bytes available in buffer
+     *   initial_in_string:  Quote state from previous chunk (1 = inside string, 0 = outside)
+     *   out_in_string:      Output quote state after this chunk (for next chunk's initial state)
+     * 
+     * Returns:
+     *   Number of safe bytes to parse from start of buffer. Remaining bytes should be
+     *   saved and prepended to next chunk. Safe length is len except when ending with
+     *   incomplete escape (e.g., ends with "\u", "\u0", "\u04", or "\uXXXX\u").
+     * 
+     * Algorithm:
+     *   - Track quote state and whether we're in a backslash escape sequence
+     *   - For \u escapes, validate 4 hex digits and optionally a surrogate pair
+     *   - If escape is incomplete at buffer end, backtrack to escape start
+     */
+    int in_string = initial_in_string;
+    int escape_next = 0;
+    size_t escape_start = SIZE_MAX;  /* Position of backslash starting incomplete escape */
+    size_t safe_len = len;
+
+    for (size_t i = 0; i < len; i++) {
+        char ch = buffer[i];
+
+        if (!in_string) {
+            if (ch == '"') in_string = 1;
+            continue;
+        }
+
+        /* Inside quoted string */
+        if (escape_next) {
+            escape_next = 0;
+            if (ch == 'u') {
+                /* Unicode escape \uXXXX or \uXXXX\uYYYY for surrogates */
+                unsigned cp = 0;
+                if (JsonParser_parseHexCodepoint(buffer, len, i + 1, &cp) != 0) {
+                    /* Cannot read 4 hex digits - incomplete escape at buffer end */
+                    safe_len = escape_start;
+                    break;
+                }
+                i += 4;  /* Skip 4 hex digits */
+
+                /* Check if this is a high surrogate */
+                unsigned combined = 0;
+                int pair_result = JsonParser_validateUtf16Pair(buffer, len, cp, i + 1, &combined);
+                if (pair_result < 0) {
+                    safe_len = escape_start;
+                    break;
+                }
+                if (pair_result == 6) {
+                    i += 6;  /* Skip following \uYYYY */
+                }
+            }
+            continue;
+        }
+
+        if (ch == '\\') {
+            escape_next = 1;
+            escape_start = i;
+            continue;
+        }
+
+        if (ch == '"') {
+            in_string = 0;
+        }
+    }
+
+    /* If we ended mid-escape, backtrack to start of incomplete escape */
+    if (escape_next && escape_start != SIZE_MAX) {
+        safe_len = escape_start;
+    }
+
+    if (out_in_string) {
+        *out_in_string = in_string;
+    }
+
+    return safe_len;
+}
+
+#define JsonParser_peek_char(p,pos,len)     (pos + 1 < len ? *(p + pos + 1) : '\0')
 
 #define JsonParser_peekObjBegin(p,pos,len)\
     (JsonParser_next_char(p, pos, len) == Json_elem(JSON_OBJ_B)\
@@ -505,13 +759,19 @@ static int JsonParser_internalParse(struct  ParserInternal *pi, const char* json
             }
             break;
         case JSON_COMMA:
-            if (JsonParser_peekEndLine(p,i,len) || JsonParser_next_char(p,i,len) == Json_elem(JSON_QUOTE)) {
+            if (pi->quote_begin) {
+                /* Comma is literal content inside a quoted string */
+                bsstr *data = (!pi->is_value) ? pi->key : pi->value;
+                bsstr_addchr(data, Json_elem(JSON_COMMA));
+            } else if (JsonParser_peekEndLine(p, i, len) || 
+                       JsonParser_next_char(p, i, len) == Json_elem(JSON_QUOTE)) {
+                /* Comma followed by end-of-line or quote: finalize current pair */
                 JsonParser_internalData(pi);
             } else if (pi->is_value && bsstr_length(pi->value) > 0) {
-                /* comma after a value - end the value */
+                /* Comma after unquoted value: finalize current pair */
                 JsonParser_internalData(pi);
             } else {
-                /* comma in quoted value */
+                /* Comma in unquoted value or between unquoted elements */
                 bsstr *data = (!pi->is_value) ? pi->key : pi->value;
                 bsstr_addchr(data, Json_elem(JSON_COMMA));
             }
@@ -530,9 +790,53 @@ static int JsonParser_internalParse(struct  ParserInternal *pi, const char* json
         case JSON_BEGIN:
         case JSON_FORMFEED:
         case JSON_LEFT:
+            if (pi->quote_begin) {
+                bsstr *data = (!pi->is_value) ? pi->key : pi->value;
+                char esc = JsonParser_peek_char(p, i, len);
+                if (esc == '\0') {
+                    pi->error = JSON_ERR_SYN;
+                    break;
+                }
+
+                if (esc == 'u') {
+                    unsigned codepoint;
+                    if (JsonParser_parseUnicodeEscape(p, len, i + 2, &codepoint) != 0) {
+                        pi->error = JSON_ERR_SYN;
+                        i++;  /* Skip backslash */
+                        break;
+                    }
+
+                    int pair_len = JsonParser_decodeSurrogatePair(p, len, i + 6, &codepoint);
+                    if (pair_len < 0) {
+                        pi->error = JSON_ERR_SYN;
+                        i++;  /* Skip backslash */
+                        break;
+                    }
+
+                    if (JsonParser_encodeUtf8(data, codepoint) != 0) {
+                        pi->error = JSON_ERR_SYN;
+                        i++;  /* Skip backslash */
+                        break;
+                    }
+                    
+                    i += 5 + pair_len;  /* Skip \uXXXX or \uXXXX\uYYYY, no additional increment from below */
+                } else {
+                    /* Regular escape sequences like \\n, \\t, etc. */
+                    if (JsonParser_appendEscapeSequence(data, esc) != 0) {
+                        pi->error = JSON_ERR_SYN;
+                        i++;
+                        break;
+                    }
+                    i++;  /* Skip backslash and escape char */
+                }
+            } else if (pi->is_value && ch != ' ' && ch != '\t' && ch != '\r' && ch != '\n') {
+                /* Preserve invalid backslashes for unquoted values */
+                bsstr_addchr(pi->value, ch);
+            }
+            break;
         case JSON_RIGHT:
         case JSON_TAB:
-        case JSON_HEX:  /* Unicode escape parsing (e.g., \uXXXX) not implemented - known limitation */
+        case JSON_HEX:  /* Unicode escape parsing now supported inside quoted strings */
         case JSON_INVALID:
             if (pi->quote_begin && !pi->is_value) {
                 bsstr_addchr(pi->key, ch);
@@ -541,6 +845,11 @@ static int JsonParser_internalParse(struct  ParserInternal *pi, const char* json
             } else if (pi->is_value && ch != ' ' && ch != '\t' && ch != '\r' && ch != '\n') {
                 /* Capture unquoted values (numbers, booleans, null) */
                 bsstr_addchr(pi->value, ch);
+            } else {
+                 /* Invalid character outside of quotes and not part of a value */
+                if (ch != ' ' && ch != '\t' && ch != '\r' && ch != '\n') {
+                    pi->error = JSON_ERR_SYN;
+                }
             }
             break;
         }
@@ -624,50 +933,7 @@ JsonNode * JsonParser_parse(struct JsonParser *parser, const char * json)
     return root;
 }
 
-/* Strip comments from JSON buffer - handles // and # comments */
-static void JsonBuffer_stripComments(const char *src, size_t src_len, 
-                                     char *dst, size_t *dst_len)
-{
-    size_t i, j = 0;
-    unsigned char in_string = 0;
-    
-    for (i = 0; i < src_len && j < 2*JSON_BUFFER_SIZE - 1; i++) {
-        char ch = src[i];
-        
-        /* Track if we're inside a quoted string */
-        if (ch == '"' && (i == 0 || src[i-1] != '\\')) {
-            in_string = !in_string;
-            dst[j++] = ch;
-            continue;
-        }
-        
-        if (in_string) {
-            dst[j++] = ch;
-            continue;
-        }
-        
-        /* Skip // and # comments outside strings */
-        if ((ch == '/' && i + 1 < src_len && src[i+1] == '/') || ch == '#') {
-            /* Skip to end of line */
-            while (i < src_len && src[i] != '\n' && src[i] != '\r') {
-                i++;
-            }
-            /* Keep newline for line tracking */
-            if (i < src_len && src[i] == '\r' && i + 1 < src_len && src[i+1] == '\n') {
-                dst[j++] = '\n';
-                i++;
-            } else if (i < src_len && (src[i] == '\n' || src[i] == '\r')) {
-                dst[j++] = '\n';
-            }
-            continue;
-        }
-        
-        dst[j++] = ch;
-    }
-    
-    dst[j] = '\0';
-    *dst_len = j;
-}
+
 
 /* Streaming JSON file parser - memory efficient, no full file buffering */
 struct JsonStreamReader {
@@ -678,6 +944,7 @@ struct JsonStreamReader {
     size_t leftover_len;
     int eof;
     struct ParserInternal *parser_state;  /* persistent parse state */
+    int in_string;  /* track if in string across chunks */
 };
 
 static int JsonStreamReader_init(struct JsonStreamReader *reader, const char *fileName)
@@ -686,54 +953,78 @@ static int JsonStreamReader_init(struct JsonStreamReader *reader, const char *fi
     if (!reader->file) {
         return JSON_NOK;
     }
+    memset(reader->buffer, 0, sizeof(reader->buffer));
+    memset(reader->leftover, 0, sizeof(reader->leftover));
     reader->buffer_len = 0;
     reader->leftover_len = 0;
     reader->eof = 0;
     reader->parser_state = NULL;
+    reader->in_string = 0;
     return JSON_OK;
 }
 
 static size_t JsonStreamReader_readChunk(struct JsonStreamReader *reader)
 {
+    /* Read next chunk from file with streaming buffer management.
+     * 
+     * Handles:
+     *   - Restoration of incomplete tokens from previous chunk (leftover buffer)
+     *   - File I/O (fread) to fill available space
+     *   - Detection of incomplete escape sequences at buffer boundary (safe_parse_len)
+     *   - Preservation of unparseable bytes for next chunk iteration
+     *   - EOF tracking and quote state persistence
+     * 
+     * Returns:
+     *   Number of safe bytes ready for parsing in reader->buffer.
+     *   0 if EOF reached or no data available.
+     * 
+     * After return, use JsonStreamReader_readChunk()->buffer for parsing and
+     * ->buffer_len for safe parse range. Incomplete tokens at boundary are
+     * automatically saved in ->leftover for prepending to next chunk.
+     */
     if (reader->eof) {
         return 0;
     }
-    
-    reader->buffer_len = fread(reader->buffer, 1, JSON_BUFFER_SIZE, reader->file);
-    
-    if (reader->buffer_len < JSON_BUFFER_SIZE) {
+
+    /* Restore any incomplete token from previous chunk */
+    if (reader->leftover_len > 0) {
+        memmove(reader->buffer, reader->leftover, reader->leftover_len);
+    }
+
+    /* Read new data from file into buffer after leftover bytes */
+    size_t bytes_to_read = JSON_BUFFER_SIZE - reader->leftover_len;
+    size_t read_len = fread(reader->buffer + reader->leftover_len, 1, bytes_to_read, reader->file);
+    reader->buffer_len = reader->leftover_len + read_len;
+    reader->leftover_len = 0;
+
+    if (read_len < bytes_to_read) {
         reader->eof = 1;
     }
-    
-    /* Check for incomplete strings at end of buffer */
-    int in_string = 0;
-    int escape_next = 0;
-    size_t i;
-    for (i = 0; i < reader->buffer_len; i++) {
-        char ch = reader->buffer[i];
-        if (escape_next) {
-            escape_next = 0;
-            continue;
-        }
-        if (ch == '\\') {
-            escape_next = 1;
-            continue;
-        }
-        if (ch == '"') {
-            in_string = !in_string;
-        }
+
+    if (reader->buffer_len == 0) {
+        return 0;
     }
-    
-    /* If we're in a string at the end, read more to complete it */
-    if (in_string && !reader->eof) {
-        size_t additional = fread(reader->buffer + reader->buffer_len, 1, 
-                                 JSON_BUFFER_SIZE - reader->buffer_len, reader->file);
-        reader->buffer_len += additional;
-        if (additional < JSON_BUFFER_SIZE - reader->buffer_len) {
-            reader->eof = 1;
+
+    /* Find how much of buffer is safe to parse (stops before incomplete escapes) */
+    int final_in_string = 0;
+    size_t safe_parse_len = JsonStreamReader_findSafeChunkLength(
+        reader->buffer, reader->buffer_len,
+        reader->in_string,        /* carry state from previous chunk */
+        &final_in_string          /* output: string state at safe_parse_len */
+    );
+
+    /* Save bytes after safe point for next chunk */
+    if (safe_parse_len < reader->buffer_len) {
+        size_t leftover_bytes = reader->buffer_len - safe_parse_len;
+        if (leftover_bytes > JSON_BUFFER_SIZE) {
+            leftover_bytes = JSON_BUFFER_SIZE;
         }
+        memcpy(reader->leftover, reader->buffer + safe_parse_len, leftover_bytes);
+        reader->leftover_len = leftover_bytes;
+        reader->buffer_len = safe_parse_len;
     }
-    
+
+    reader->in_string = final_in_string;
     return reader->buffer_len;
 }
 
@@ -752,9 +1043,7 @@ static JsonNode* JsonParser_parseFileStreaming(struct JsonParser *parser, const 
     struct ParserInternal pi;
     int error = JSON_ERR_NONE;
     JsonNode *root = NULL;
-    char clean_buffer[2*JSON_BUFFER_SIZE];
-    size_t clean_len;
-    
+
     if (JsonStreamReader_init(&reader, fileName) != JSON_OK) {
         parser->m_errorString = strerror(errno);
         return NULL;
@@ -773,11 +1062,8 @@ static JsonNode* JsonParser_parseFileStreaming(struct JsonParser *parser, const 
     
     /* Read and parse file in chunks */
     while (JsonStreamReader_readChunk(&reader) > 0) {
-        /* Strip comments from buffer before parsing */
-        JsonBuffer_stripComments(reader.buffer, reader.buffer_len, clean_buffer, &clean_len);
-        
-        /* Parse the cleaned buffer */
-        error = JsonParser_internalParse(&pi, clean_buffer, (int)clean_len);
+        /* Parse buffer directly (standard JSON only, no comments) */
+        error = JsonParser_internalParse(&pi, reader.buffer, (int)reader.buffer_len);
         if (error != JSON_ERR_NONE) {
             DEBUG_PRINT("Streaming parse error at chunk\n");
             break;

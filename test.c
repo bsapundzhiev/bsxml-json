@@ -192,25 +192,25 @@ void printJson( JsonNode *node )
     free(str);
 }
 
-void json_parser_test()
+int json_parser_test(String param)
 {
-    String param = "test/test2.json";
     JsonParser parser;
     JsonNode *root;
+    int result = 0;
     CLK_ON(&t);
 
-    //root = JsonParser_parse(&parser, json2);
-    //root = JsonParser_parse(&parser, json);
     printf("parse file %s\n", param);
     root = JsonParser_parseFile(&parser, param);
     if (root) {
         printJson( root );
     } else {
         printf("Err: %s\n", JsonParser_getErrorString(&parser));
+        result = -1;
     }
 
     JsonNode_deleteTree(root);
     CLK_OFF(&t);
+    return result;
 }
 
 void json_create_test ()
@@ -305,7 +305,10 @@ int main(int argc, char **argv)
     find_test();
     /*test json */
     json_create_test();
-    json_parser_test();
+    json_parser_test("test/test2.json");
+    json_parser_test("test/unicode_escapes.json");
+    json_parser_test("test/unicode_test.json");
+    json_parser_test("test/nested.json"); 
 #endif
 #ifdef _WIN32
     _CrtDumpMemoryLeaks();
