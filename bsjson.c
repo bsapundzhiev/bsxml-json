@@ -351,6 +351,7 @@ struct ParserFrame {
     char *name;
     enum eElemType opening_type;
     enum JsonGrammarState grammar_state;
+    int after_comma;
 };
 
 struct  ParserInternal { /*Jsonlexer*/
@@ -374,12 +375,16 @@ struct  ParserInternal { /*Jsonlexer*/
     int in_line_comment;
     int block_prev_star;
     int pending_slash;
-    int after_comma;
-    int just_closed_container;
     int root_started;
     int root_complete;
     int bare_token_ended;
 };
+
+static struct ParserFrame *JsonParser_currentFrame(struct ParserInternal *pi)
+{
+    if (!pi || pi->stack.num == 0) return NULL;
+    return stack_back(&pi->stack);
+}
 
 static void JsonParser_internalCreate(struct ParserInternal *pi)
 {
@@ -401,8 +406,6 @@ static void JsonParser_internalCreate(struct ParserInternal *pi)
     pi->in_line_comment = 0;
     pi->block_prev_star = 0;
     pi->pending_slash = 0;
-    pi->after_comma = 0;
-    pi->just_closed_container = 0;
     pi->root_started = 0;
     pi->root_complete = 0;
     pi->bare_token_ended = 0;
@@ -451,14 +454,15 @@ static int JsonParser_internalBeginObj(struct  ParserInternal *pi, enum eElemTyp
         }
         pi->root_started = 1;
     } else {
-        struct ParserFrame *parent = stack_back(&pi->stack);
+        struct ParserFrame *parent = JsonParser_currentFrame(pi);
         int expects_value = parent->grammar_state == JSON_GRAMMAR_OBJECT_VALUE
             || parent->grammar_state == JSON_GRAMMAR_ARRAY_VALUE_OR_END;
-        if (!expects_value || pi->just_closed_container || pi->token_present) {
+        if (!expects_value || pi->token_present) {
             free(name);
             pi->error = JSON_ERR_SYN;
             return JSON_NOK;
         }
+        parent->after_comma = 0;
     }
     frame = stack_push_back(&pi->stack);
     if (!frame) {
@@ -470,6 +474,7 @@ static int JsonParser_internalBeginObj(struct  ParserInternal *pi, enum eElemTyp
     frame->opening_type = elemType;
     frame->grammar_state = elemType == JSON_OBJ_B
         ? JSON_GRAMMAR_OBJECT_KEY_OR_END : JSON_GRAMMAR_ARRAY_VALUE_OR_END;
+    frame->after_comma = 0;
     if (pi->startElem) {
         pi->startElem(pi->parser, name, (elemType == JSON_ARR_B) ? JSON_ARRAY : JSON_OBJ);
     }
@@ -487,7 +492,7 @@ static int JsonParser_internalEndObj(struct  ParserInternal *pi, enum eElemType 
         pi->error = JSNON_ERR_NOTOBJ;
         return JSON_NOK;
     }
-    frame = stack_back(&pi->stack);
+    frame = JsonParser_currentFrame(pi);
     if ((frame->opening_type == JSON_OBJ_B && elemType != JSON_OBJ_E)
         || (frame->opening_type == JSON_ARR_B && elemType != JSON_ARR_E)) {
         pi->error = JSNON_ERR_NOTOBJ;
@@ -505,9 +510,10 @@ static int JsonParser_internalEndObj(struct  ParserInternal *pi, enum eElemType 
     if (pi->stack.num == 0) {
         pi->root_complete = 1;
     } else {
-        struct ParserFrame *parent = stack_back(&pi->stack);
+        struct ParserFrame *parent = JsonParser_currentFrame(pi);
         parent->grammar_state = parent->opening_type == JSON_OBJ_B
             ? JSON_GRAMMAR_OBJECT_COMMA_OR_END : JSON_GRAMMAR_ARRAY_COMMA_OR_END;
+        parent->after_comma = 0;
     }
     return 0;
 }
@@ -661,6 +667,7 @@ static int JsonParser_appendEscapeSequence(bsstr *dest, char esc_char)
 static int JsonParser_handleQuote(struct ParserInternal *pi, char ch)
 {
     bsstr *data;
+    struct ParserFrame *frame;
 
     if (ch != '"' && !(pi->json5_enabled && ch == '\'')) return 0;
     if (pi->quote_begin) {
@@ -673,15 +680,15 @@ static int JsonParser_handleQuote(struct ParserInternal *pi, char ch)
         }
         return 1;
     }
-    if (pi->root_complete || pi->just_closed_container) {
+    if (pi->root_complete) {
         pi->error = JSON_ERR_SYN;
         return 1;
     }
-    if (pi->stack.num == 0) {
+    frame = JsonParser_currentFrame(pi);
+    if (!frame) {
         pi->error = JSON_ERR_SYN;
         return 1;
     } else {
-        struct ParserFrame *frame = stack_back(&pi->stack);
         int expected = frame->opening_type == JSON_OBJ_B
             ? (pi->is_value
                 ? frame->grammar_state == JSON_GRAMMAR_OBJECT_VALUE
@@ -700,8 +707,7 @@ static int JsonParser_handleQuote(struct ParserInternal *pi, char ch)
     pi->quote_begin = 1;
     pi->quote_char = ch;
     pi->token_present = 1;
-    pi->after_comma = 0;
-    pi->just_closed_container = 0;
+    frame->after_comma = 0;
     pi->value_was_quoted = 1;
     return 1;
 }
@@ -828,6 +834,7 @@ static int JsonLexer_isWhitespace(char ch)
 static enum JsonLexerResult JsonLexer_handleText(struct ParserInternal *pi, char ch)
 {
     bsstr *data;
+    struct ParserFrame *frame;
 
     if (pi->quote_begin) {
         if ((unsigned char)ch < 0x20) {
@@ -846,7 +853,8 @@ static enum JsonLexerResult JsonLexer_handleText(struct ParserInternal *pi, char
     if (JsonLexer_isStructural(ch)) {
         return JSON_LEXER_NOT_HANDLED;
     }
-    if (pi->root_complete || pi->stack.num == 0) {
+    frame = JsonParser_currentFrame(pi);
+    if (pi->root_complete || !frame) {
         pi->error = JSON_ERR_SYN;
         return JSON_LEXER_ERROR;
     }
@@ -855,7 +863,6 @@ static enum JsonLexerResult JsonLexer_handleText(struct ParserInternal *pi, char
         return JSON_LEXER_ERROR;
     }
     {
-        struct ParserFrame *frame = stack_back(&pi->stack);
         int expected = frame->opening_type == JSON_OBJ_B
             ? (pi->is_value
                 ? frame->grammar_state == JSON_GRAMMAR_OBJECT_VALUE
@@ -866,10 +873,8 @@ static enum JsonLexerResult JsonLexer_handleText(struct ParserInternal *pi, char
             return JSON_LEXER_ERROR;
         }
     }
-    pi->after_comma = 0;
-    pi->just_closed_container = 0;
-    if (pi->is_value || (pi->stack.num > 0
-        && ((struct ParserFrame *)stack_back(&pi->stack))->opening_type == JSON_ARR_B)) {
+    frame->after_comma = 0;
+    if (pi->is_value || frame->opening_type == JSON_ARR_B) {
         pi->token_present = 1;
         bsstr_addchr(pi->is_value ? pi->value : pi->key, ch);
         return JSON_LEXER_CONSUMED;
@@ -916,19 +921,20 @@ static int JsonParser_internalParse(struct  ParserInternal *pi, const char* json
 
         case JSON_OBJ_B:
         case JSON_ARR_B:
-            pi->after_comma = 0;
-            pi->just_closed_container = 0;
             JsonParser_internalBeginObj(pi, elemType);
             break;
 
         case JSON_OBJ_E:
         case JSON_ARR_E:
             {
-                struct ParserFrame *frame = pi->stack.num > 0
-                    ? stack_back(&pi->stack) : NULL;
-                if (frame && frame->opening_type == JSON_OBJ_B
+                struct ParserFrame *frame = JsonParser_currentFrame(pi);
+                if (!frame) {
+                    pi->error = JSNON_ERR_NOTOBJ;
+                    break;
+                }
+                if (frame->opening_type == JSON_OBJ_B
                     && ((pi->is_value && !pi->token_present
-                         && bsstr_length(pi->value) == 0 && !pi->just_closed_container)
+                         && bsstr_length(pi->value) == 0)
                         || (!pi->is_value && (pi->token_present
                             || bsstr_length(pi->key) > 0)))) {
                     pi->error = JSON_ERR_SYN;
@@ -937,22 +943,20 @@ static int JsonParser_internalParse(struct  ParserInternal *pi, const char* json
                 if (pi->token_present || bsstr_length(pi->key) || bsstr_length(pi->value)) {
                     if (JsonParser_finishScalar(pi, frame) != JSON_OK) break;
                 }
-                if (frame && frame->grammar_state != JSON_GRAMMAR_OBJECT_COMMA_OR_END
+                if (frame->grammar_state != JSON_GRAMMAR_OBJECT_COMMA_OR_END
                     && frame->grammar_state != JSON_GRAMMAR_ARRAY_COMMA_OR_END
                     && !((frame->grammar_state == JSON_GRAMMAR_OBJECT_KEY_OR_END
                           || frame->grammar_state == JSON_GRAMMAR_ARRAY_VALUE_OR_END)
-                         && (!pi->after_comma || pi->json5_enabled))) {
+                         && (!frame->after_comma || pi->json5_enabled))) {
                     pi->error = JSON_ERR_SYN;
                     break;
                 }
+                if (frame->after_comma && !pi->json5_enabled) {
+                    pi->error = JSON_ERR_COMMA;
+                    break;
+                }
             }
-            if (pi->after_comma && !pi->json5_enabled) {
-                pi->error = JSON_ERR_COMMA;
-                break;
-            }
-            pi->after_comma = 0;
             JsonParser_internalEndObj(pi, elemType);
-            pi->just_closed_container = 1;
             break;
 
         case JSON_QUOTE:
@@ -961,8 +965,7 @@ static int JsonParser_internalParse(struct  ParserInternal *pi, const char* json
         case JSON_COLON:
             /* Begin value */
             if (!pi->quote_begin) {
-                struct ParserFrame *frame = pi->stack.num > 0
-                    ? stack_back(&pi->stack) : NULL;
+                struct ParserFrame *frame = JsonParser_currentFrame(pi);
                 if (!frame || frame->opening_type != JSON_OBJ_B
                     || frame->grammar_state != JSON_GRAMMAR_OBJECT_KEY_OR_END || pi->is_value
                     || (!pi->token_present && bsstr_length(pi->key) == 0)) {
@@ -979,13 +982,13 @@ static int JsonParser_internalParse(struct  ParserInternal *pi, const char* json
             if (pi->stack.num == 0) {
                 pi->error = JSON_ERR_COMMA;
             } else if (pi->token_present || bsstr_length(pi->key) || bsstr_length(pi->value)) {
-                struct ParserFrame *frame = stack_back(&pi->stack);
+                struct ParserFrame *frame = JsonParser_currentFrame(pi);
                 if (JsonParser_finishScalar(pi, frame) != JSON_OK) break;
                 frame->grammar_state = frame->opening_type == JSON_OBJ_B
                     ? JSON_GRAMMAR_OBJECT_KEY_OR_END : JSON_GRAMMAR_ARRAY_VALUE_OR_END;
-                pi->after_comma = 1;
-            } else if (pi->just_closed_container) {
-                struct ParserFrame *frame = stack_back(&pi->stack);
+                frame->after_comma = 1;
+            } else {
+                struct ParserFrame *frame = JsonParser_currentFrame(pi);
                 if (frame->grammar_state != JSON_GRAMMAR_OBJECT_COMMA_OR_END
                     && frame->grammar_state != JSON_GRAMMAR_ARRAY_COMMA_OR_END) {
                     pi->error = JSON_ERR_COMMA;
@@ -993,10 +996,7 @@ static int JsonParser_internalParse(struct  ParserInternal *pi, const char* json
                 }
                 frame->grammar_state = frame->opening_type == JSON_OBJ_B
                     ? JSON_GRAMMAR_OBJECT_KEY_OR_END : JSON_GRAMMAR_ARRAY_VALUE_OR_END;
-                pi->after_comma = 1;
-                pi->just_closed_container = 0;
-            } else {
-                pi->error = JSON_ERR_COMMA;
+                frame->after_comma = 1;
             }
             break;
 

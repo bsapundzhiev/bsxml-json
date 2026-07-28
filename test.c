@@ -248,7 +248,9 @@ static int json5_regression_test(void)
         "[1 2]",
         "[{}{}]",
         "{\"a\":[] \"b\":{}}",
-        "{\"a\":,}"
+        "{\"a\":,}",
+        "[1,]",
+        "{\"child\":{},}"
     };
 
     root = JsonParser_parseJSON5(&parser,
@@ -289,6 +291,13 @@ static int json5_regression_test(void)
         "{\"emptyObject\":{},\"emptyArray\":[],\"nested\":[{\"x\":1},[2]]}");
     if (!root) {
         fprintf(stderr, "valid nested grammar test failed\n");
+        result = -1;
+    }
+    JsonNode_deleteTree(root);
+
+    root = JsonParser_parseJSON5(&parser, "{a:[1,],b:{c:2,},}");
+    if (!root) {
+        fprintf(stderr, "nested JSON5 trailing comma test failed\n");
         result = -1;
     }
     JsonNode_deleteTree(root);
