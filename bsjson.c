@@ -632,6 +632,72 @@ static int JsonParser_handleQuote(struct ParserInternal *pi, char ch)
     return 1;
 }
 
+enum JsonLexerResult {
+    JSON_LEXER_NOT_HANDLED = 0,
+    JSON_LEXER_CONSUMED = 1,
+    JSON_LEXER_ERROR = -1
+};
+
+static enum JsonLexerResult JsonLexer_handleComment(struct ParserInternal *pi,
+                                                     const char *buffer,
+                                                     int *position,
+                                                     int len)
+{
+    char ch = buffer[*position];
+
+    if (pi->in_line_comment) {
+        if (ch == '\n') {
+            pi->in_line_comment = 0;
+            pi->line++;
+        }
+        return JSON_LEXER_CONSUMED;
+    }
+    if (pi->in_block_comment) {
+        if (pi->block_prev_star && ch == '/') {
+            pi->in_block_comment = 0;
+            pi->block_prev_star = 0;
+        } else {
+            pi->block_prev_star = (ch == '*');
+            if (ch == '\n') pi->line++;
+        }
+        return JSON_LEXER_CONSUMED;
+    }
+    if (pi->pending_slash) {
+        pi->pending_slash = 0;
+        if (ch == '/') {
+            pi->in_line_comment = 1;
+            return JSON_LEXER_CONSUMED;
+        }
+        if (ch == '*') {
+            pi->in_block_comment = 1;
+            pi->block_prev_star = 0;
+            return JSON_LEXER_CONSUMED;
+        }
+        pi->error = JSON_ERR_SYN;
+        return JSON_LEXER_ERROR;
+    }
+    if (!pi->json5_enabled || pi->quote_begin || ch != '/') {
+        return JSON_LEXER_NOT_HANDLED;
+    }
+    if (*position + 1 >= len) {
+        pi->pending_slash = 1;
+        return JSON_LEXER_CONSUMED;
+    }
+    if (buffer[*position + 1] == '/') {
+        pi->in_line_comment = 1;
+        (*position)++;
+        return JSON_LEXER_CONSUMED;
+    }
+    if (buffer[*position + 1] == '*') {
+        pi->in_block_comment = 1;
+        pi->block_prev_star = 0;
+        (*position)++;
+        return JSON_LEXER_CONSUMED;
+    }
+    pi->error = JSON_ERR_SYN;
+    return JSON_LEXER_ERROR;
+}
+
 static int JsonParser_internalParse(struct  ParserInternal *pi, const char* json, int len)
 {
     int i = 0;
@@ -646,76 +712,9 @@ static int JsonParser_internalParse(struct  ParserInternal *pi, const char* json
 
         ch = p[i];
 
-        if (pi->in_line_comment) {
-            if (ch == '\n') {
-                pi->in_line_comment = 0;
-                pi->line++;
-            }
-            continue;
-        }
-        if (pi->in_block_comment) {
-            if (pi->block_prev_star && ch == '/') {
-                pi->in_block_comment = 0;
-                pi->block_prev_star = 0;
-                continue;
-            }
-            pi->block_prev_star = (ch == '*');
-            if (ch == '\n') pi->line++;
-            continue;
-        }
-        if (pi->pending_slash) {
-            pi->pending_slash = 0;
-            if (ch == '/') {
-                pi->in_line_comment = 1;
-                continue;
-            }
-            if (ch == '*') {
-                pi->in_block_comment = 1;
-                pi->block_prev_star = 0;
-                continue;
-            }
-            pi->error = JSON_ERR_SYN;
-            break;
-        }
-
-        /* Skip comments when JSON5 runtime mode enabled */
-        if (pi->json5_enabled && !pi->quote_begin && ch == '/') {
-            if (i + 1 < len) {
-                if (p[i + 1] == '/') {
-                    /* Skip line comment */
-                    i++;
-                    while (i < len && p[i] != '\n') i++;
-                    if (i >= len) {
-                        pi->in_line_comment = 1;
-                        return JSON_ERR_NONE;
-                    }
-                    pi->line++;
-                    continue;
-                } else if (p[i + 1] == '*') {
-                    /* Skip block comment */
-                    i += 2;
-                    int comment_closed = 0;
-                    while (i + 1 < len) {
-                        if (p[i] == '*' && p[i + 1] == '/') {
-                            i++;
-                            comment_closed = 1;
-                            break;
-                        }
-                        if (p[i] == '\n') pi->line++;
-                        i++;
-                    }
-                    if (!comment_closed) {
-                        pi->in_block_comment = 1;
-                        pi->block_prev_star = (len > 0 && p[len - 1] == '*');
-                        return JSON_ERR_NONE;
-                    }
-                    continue;
-                }
-            } else {
-                pi->pending_slash = 1;
-                return JSON_ERR_NONE;
-            }
-        }
+        enum JsonLexerResult comment_result = JsonLexer_handleComment(pi, p, &i, len);
+        if (comment_result == JSON_LEXER_CONSUMED) continue;
+        if (comment_result == JSON_LEXER_ERROR) break;
 
         if (JsonParser_handleQuote(pi, ch)) continue;
 

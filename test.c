@@ -255,6 +255,20 @@ static int json5_regression_test(void)
         result = -1;
     }
 
+    root = JsonParser_parseJSON5(&parser, "{a: 1/**/}// comment at EOF");
+    if (root == NULL) {
+        fprintf(stderr, "valid JSON5 comment boundaries were rejected\n");
+        result = -1;
+    }
+    JsonNode_deleteTree(root);
+
+    root = JsonParser_parseJSON5(&parser, "{a: 1/*/}");
+    if (root != NULL) {
+        fprintf(stderr, "unterminated short block comment was accepted\n");
+        JsonNode_deleteTree(root);
+        result = -1;
+    }
+
     root = JsonParser_parse(&parser, "{'not': 'json'}");
     if (root != NULL) {
         fprintf(stderr, "single quotes were accepted in strict JSON mode\n");
