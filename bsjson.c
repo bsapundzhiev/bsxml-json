@@ -47,11 +47,6 @@ static const char jsonElems [] = {
     '/','\b','\f', '\n', '\r', '\t', 'u'
 };
 
-static char Json_elem(enum eElemType type)
-{
-    return  jsonElems[type];
-}
-
 static enum eElemType Json_typeOfElem(const char c)
 {
     enum eElemType type = JSON_INVALID;
@@ -738,6 +733,54 @@ static enum JsonLexerResult JsonLexer_handleComment(struct ParserInternal *pi,
     return JSON_LEXER_ERROR;
 }
 
+static int JsonLexer_isStructural(char ch)
+{
+    return ch == '{' || ch == '}' || ch == '[' || ch == ']'
+        || ch == ':' || ch == ',';
+}
+
+static int JsonLexer_isWhitespace(char ch)
+{
+    return ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n';
+}
+
+static enum JsonLexerResult JsonLexer_handleText(struct ParserInternal *pi, char ch)
+{
+    bsstr *data;
+
+    if (pi->quote_begin) {
+        if ((unsigned char)ch < 0x20) {
+            pi->error = JSON_ERR_SYN;
+            return JSON_LEXER_ERROR;
+        }
+        data = pi->is_value ? pi->value : pi->key;
+        bsstr_addchr(data, ch);
+        return JSON_LEXER_CONSUMED;
+    }
+    if (JsonLexer_isWhitespace(ch)) {
+        if (ch == '\n') pi->line++;
+        return JSON_LEXER_CONSUMED;
+    }
+    if (JsonLexer_isStructural(ch)) {
+        return JSON_LEXER_NOT_HANDLED;
+    }
+    pi->after_comma = 0;
+    pi->just_closed_container = 0;
+    if (pi->is_value) {
+        pi->token_present = 1;
+        bsstr_addchr(pi->value, ch);
+        return JSON_LEXER_CONSUMED;
+    }
+    if (pi->json5_enabled
+        && Json5_isIdentifierChar(ch, bsstr_length(pi->key) == 0)) {
+        pi->token_present = 1;
+        bsstr_addchr(pi->key, ch);
+        return JSON_LEXER_CONSUMED;
+    }
+    pi->error = JSON_ERR_SYN;
+    return JSON_LEXER_ERROR;
+}
+
 static int JsonParser_internalParse(struct  ParserInternal *pi, const char* json, int len)
 {
     int i = 0;
@@ -762,11 +805,9 @@ static int JsonParser_internalParse(struct  ParserInternal *pi, const char* json
 
         if (JsonParser_handleQuote(pi, ch)) continue;
 
-        if (!pi->quote_begin && ch != ' ' && ch != '\t' && ch != '\r' && ch != '\n'
-            && ch != ',' && ch != '}' && ch != ']') {
-            pi->after_comma = 0;
-            pi->just_closed_container = 0;
-        }
+        enum JsonLexerResult text_result = JsonLexer_handleText(pi, ch);
+        if (text_result == JSON_LEXER_CONSUMED) continue;
+        if (text_result == JSON_LEXER_ERROR) break;
 
         switch ( elemType = Json_typeOfElem(ch) ) {
 
@@ -804,18 +845,10 @@ static int JsonParser_internalParse(struct  ParserInternal *pi, const char* json
                 pi->is_value = 1;
                 pi->token_present = 0;
                 pi->value_was_quoted = 0;
-            } else {
-                /* colon in value */
-                bsstr *data = (!pi->is_value) ? pi->key : pi->value;
-                bsstr_addchr(data, Json_elem(JSON_COLON));
             }
             break;
         case JSON_COMMA:
-            if (pi->quote_begin) {
-                /* Comma is literal content inside a quoted string */
-                bsstr *data = (!pi->is_value) ? pi->key : pi->value;
-                bsstr_addchr(data, Json_elem(JSON_COMMA));
-            } else if (pi->token_present || bsstr_length(pi->key) || bsstr_length(pi->value)) {
+            if (pi->token_present || bsstr_length(pi->key) || bsstr_length(pi->value)) {
                 JsonParser_internalData(pi);
                 pi->after_comma = 1;
             } else if (pi->just_closed_container) {
@@ -826,43 +859,16 @@ static int JsonParser_internalParse(struct  ParserInternal *pi, const char* json
             }
             break;
 
-        case JSON_CR:/*skip*/
-            break;
+        case JSON_CR:
         case JSON_LF:
-            pi->line++;
-            break;
-
         case JSON_BEGIN:
         case JSON_FORMFEED:
         case JSON_LEFT:
-            if (pi->is_value && ch != ' ' && ch != '\t' && ch != '\r' && ch != '\n') {
-                /* Preserve invalid backslashes for unquoted values */
-                bsstr_addchr(pi->value, ch);
-            }
-            break;
         case JSON_RIGHT:
         case JSON_TAB:
-        case JSON_HEX:  /* Unicode escape parsing now supported inside quoted strings */
+        case JSON_HEX:
         case JSON_INVALID:
-            if (pi->quote_begin && !pi->is_value) {
-                bsstr_addchr(pi->key, ch);
-            } else if (pi->quote_begin && pi->is_value) {
-                bsstr_addchr(pi->value, ch);
-            } else if (pi->is_value && ch != ' ' && ch != '\t' && ch != '\r' && ch != '\n') {
-                /* Capture unquoted values (numbers, booleans, null) */
-                pi->token_present = 1;
-                bsstr_addchr(pi->value, ch);
-            } else if (pi->json5_enabled
-                       && Json5_isIdentifierChar(ch, bsstr_length(pi->key) == 0)) {
-                /* JSON5 unquoted object key (ASCII identifier subset). */
-                pi->token_present = 1;
-                bsstr_addchr(pi->key, ch);
-            } else {
-                 /* Invalid character outside of quotes and not part of a value */
-                if (ch != ' ' && ch != '\t' && ch != '\r' && ch != '\n') {
-                    pi->error = JSON_ERR_SYN;
-                }
-            }
+            pi->error = JSON_ERR_SYN; /* Text is handled before the switch. */
             break;
         }
     }

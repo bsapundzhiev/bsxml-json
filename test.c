@@ -235,7 +235,9 @@ static int json5_regression_test(void)
         "{\"bad_escape\": \"\\q\"}",
         "{\"short_unicode\": \"\\u12\"}",
         "{\"low_surrogate\": \"\\uDC00\"}",
-        "{\"missing_low_surrogate\": \"\\uD800x\"}"
+        "{\"missing_low_surrogate\": \"\\uD800x\"}",
+        "{\"raw_newline\": \"a\nb\"}",
+        "{\"raw_tab\": \"a\tb\"}"
     };
 
     root = JsonParser_parseJSON5(&parser,
@@ -248,6 +250,16 @@ static int json5_regression_test(void)
         || !JsonNode_getPairValue(root, "value")
         || strcmp(JsonNode_getPairValue(root, "value"), "NaN") != 0) {
         fprintf(stderr, "JSON5 regression test failed\n");
+        result = -1;
+    }
+    JsonNode_deleteTree(root);
+
+    root = JsonParser_parse(&parser, "{\"structural\":\"{}[],:\",\"empty\":\"\"}");
+    if (!root || !JsonNode_getPairValue(root, "structural")
+        || strcmp(JsonNode_getPairValue(root, "structural"), "{}[],:") != 0
+        || !JsonNode_getPairValue(root, "empty")
+        || strcmp(JsonNode_getPairValue(root, "empty"), "") != 0) {
+        fprintf(stderr, "quoted text token regression test failed\n");
         result = -1;
     }
     JsonNode_deleteTree(root);
