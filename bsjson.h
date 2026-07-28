@@ -12,10 +12,16 @@
 #ifndef __BSJSON_H
 #define __BSJSON_H
 
+#include <stddef.h>
 #include "array.h"
 
 #ifdef _WIN32
 #define strdup _strdup
+#endif
+
+#ifndef JSON_BUFFER_SIZE
+/* Default file-parser read size; explicit WithChunkSize APIs override it per call. */
+#define JSON_BUFFER_SIZE 32
 #endif
 
 //#define DEBUG_JSON
@@ -36,7 +42,6 @@ enum {JSON_VALUE_STRING = 0, JSON_VALUE_NUMBER, JSON_VALUE_BOOL, JSON_VALUE_NULL
 #define JSON_IS_ARRAY(node)\
     (node->m_type == JSON_ARRAY)
 
-struct JsonNode;
 typedef char * String;
 typedef struct JsonNode JsonNode;
 typedef struct JsonParser JsonParser;
@@ -51,9 +56,9 @@ struct JsonPair {
 struct JsonNode {
     int m_type;
     String m_name;
-    JsonNode * m_parent;
-    cpo_array_t *m_pairs;
-    cpo_array_t *m_childs;
+    JsonNode *m_parent;
+    cpo_array_t *m_pairs; /* array of JsonPair */
+    cpo_array_t *m_childs; /* array of JsonNode */
 };
 
 struct JsonParser {
@@ -62,10 +67,18 @@ struct JsonParser {
     String m_errorString;
 };
 
+/* Parser entry points */
 JsonNode *JsonParser_parse(JsonParser *parser, const char * json);
 JsonNode *JsonParser_parseFile(JsonParser *parser, const char *fileName);
+JsonNode *JsonParser_parseFileWithChunkSize(JsonParser *parser, const char *fileName,
+                                            size_t chunk_size);
+JsonNode *JsonParser_parseJSON5(JsonParser *parser, const char *json);
+JsonNode *JsonParser_parseFileJSON5(JsonParser *parser, const char *fileName);
+JsonNode *JsonParser_parseFileJSON5WithChunkSize(JsonParser *parser, const char *fileName,
+                                                 size_t chunk_size);
 String JsonParser_getErrorString(JsonParser *parser);
-//Create root node
+
+/* Node helpers */
 JsonNode *JsonNode_Create();
 JsonNode *JsonNode_createChild(JsonNode *node, String name, int type);
 JsonNode *JsonNode_createObject(JsonNode * node, String name);
