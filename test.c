@@ -245,7 +245,10 @@ static int json5_regression_test(void)
         "[1:2]",
         "{\"missing_value\":}",
         "{\"missing_colon\"}",
-        "[1 2]"
+        "[1 2]",
+        "[{}{}]",
+        "{\"a\":[] \"b\":{}}",
+        "{\"a\":,}"
     };
 
     root = JsonParser_parseJSON5(&parser,
@@ -278,6 +281,14 @@ static int json5_regression_test(void)
         || strcmp(JsonNode_getPair(JsonNode_getChild(root, 0), 0)->key, "1") != 0
         || strcmp(JsonNode_getPair(JsonNode_getChild(root, 0), 3)->key, "-2.5") != 0) {
         fprintf(stderr, "bare array value grammar test failed\n");
+        result = -1;
+    }
+    JsonNode_deleteTree(root);
+
+    root = JsonParser_parse(&parser,
+        "{\"emptyObject\":{},\"emptyArray\":[],\"nested\":[{\"x\":1},[2]]}");
+    if (!root) {
+        fprintf(stderr, "valid nested grammar test failed\n");
         result = -1;
     }
     JsonNode_deleteTree(root);
