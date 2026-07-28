@@ -237,7 +237,15 @@ static int json5_regression_test(void)
         "{\"low_surrogate\": \"\\uDC00\"}",
         "{\"missing_low_surrogate\": \"\\uD800x\"}",
         "{\"raw_newline\": \"a\nb\"}",
-        "{\"raw_tab\": \"a\tb\"}"
+        "{\"raw_tab\": \"a\tb\"}",
+        "{}{}",
+        "{\"missing_colon\" {}}",
+        "{\"a\":{} \"missing_comma\":1}",
+        "{\"repeated_colon\":1:2}",
+        "[1:2]",
+        "{\"missing_value\":}",
+        "{\"missing_colon\"}",
+        "[1 2]"
     };
 
     root = JsonParser_parseJSON5(&parser,
@@ -260,6 +268,16 @@ static int json5_regression_test(void)
         || !JsonNode_getPairValue(root, "empty")
         || strcmp(JsonNode_getPairValue(root, "empty"), "") != 0) {
         fprintf(stderr, "quoted text token regression test failed\n");
+        result = -1;
+    }
+    JsonNode_deleteTree(root);
+
+    root = JsonParser_parse(&parser, "{\"values\":[1,true,null,-2.5]}");
+    if (!root || JsonNode_getChildCount(root) != 1
+        || JsonNode_getPairCount(JsonNode_getChild(root, 0)) != 4
+        || strcmp(JsonNode_getPair(JsonNode_getChild(root, 0), 0)->key, "1") != 0
+        || strcmp(JsonNode_getPair(JsonNode_getChild(root, 0), 3)->key, "-2.5") != 0) {
+        fprintf(stderr, "bare array value grammar test failed\n");
         result = -1;
     }
     JsonNode_deleteTree(root);
