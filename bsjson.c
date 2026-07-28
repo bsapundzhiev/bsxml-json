@@ -488,7 +488,8 @@ static int JsonParser_internalData(struct  ParserInternal *pi)
         return JSON_NOK;
     }
 
-    if (pi->token_present || bsstr_length(pi->key) || bsstr_length(pi->value)) {
+    if (pi->token_present
+        || (pi->is_value ? bsstr_length(pi->value) : bsstr_length(pi->key))) {
 
         if (pi->elemData) {
             pi->elemData(pi->parser,  bsstr_get_bufref(pi->key), bsstr_get_bufref(pi->value) );
@@ -501,19 +502,6 @@ static int JsonParser_internalData(struct  ParserInternal *pi)
 
 /* Find previous non-whitespace character within buffer bounds
  * Returns '\0' if reached buffer start (don't go past 0) */
-static char JsonParser_prev_char(const char *p, int pos)
-{
-    char ch;
-    while ( --pos >= 0 ) {
-        ch = *(p + pos);
-        /* Treat line breaks as a logical boundary: don't scan past them */
-        if (ch == '\n' || ch == '\r') return '\0';
-        if (ch != ' ' && ch != '\t')
-            return ch;
-    }
-    return '\0';  /* Start of buffer reached */
-}
-
 static int JsonParser_hexDigit(char ch)
 {
     if (ch >= '0' && ch <= '9') return ch - '0';
@@ -615,6 +603,35 @@ static int JsonParser_appendEscapeSequence(bsstr *dest, char esc_char)
 
 #define JsonParser_peek_char(p,pos,len)     (pos + 1 < len ? *(p + pos + 1) : '\0')
 
+static int JsonParser_handleQuote(struct ParserInternal *pi, char ch)
+{
+    bsstr *data;
+
+    if (ch != '"' && !(pi->json5_enabled && ch == '\'')) return 0;
+    if (pi->quote_begin) {
+        if (ch == pi->quote_char) {
+            pi->quote_begin = 0;
+            pi->quote_char = '"';
+        } else {
+            data = pi->is_value ? pi->value : pi->key;
+            bsstr_addchr(data, ch);
+        }
+        return 1;
+    }
+    if (pi->token_present
+        || (pi->is_value ? bsstr_length(pi->value) : bsstr_length(pi->key))) {
+        pi->error = JSON_ERR_SYN;
+        return 1;
+    }
+    pi->quote_begin = 1;
+    pi->quote_char = ch;
+    pi->token_present = 1;
+    pi->after_comma = 0;
+    pi->just_closed_container = 0;
+    if (pi->is_value) pi->value_was_quoted = 1;
+    return 1;
+}
+
 static int JsonParser_internalParse(struct  ParserInternal *pi, const char* json, int len)
 {
     int i = 0;
@@ -700,6 +717,8 @@ static int JsonParser_internalParse(struct  ParserInternal *pi, const char* json
             }
         }
 
+        if (JsonParser_handleQuote(pi, ch)) continue;
+
         if (!pi->quote_begin && ch != ' ' && ch != '\t' && ch != '\r' && ch != '\n'
             && ch != ',' && ch != '}' && ch != ']') {
             pi->after_comma = 0;
@@ -730,57 +749,18 @@ static int JsonParser_internalParse(struct  ParserInternal *pi, const char* json
             break;
 
         case JSON_QUOTE:
-            /* Handle single quotes when JSON5 runtime mode enabled */
-            if (pi->json5_enabled && ch == '\'' && pi->quote_begin && pi->quote_char == '\'') {
-                /* Closing single quote in JSON5 mode */
-                pi->quote_begin = 0;
-                pi->quote_char = '"';
-                break;
-            } else if (pi->json5_enabled && ch == '\'' && !pi->quote_begin) {
-                /* Opening single quote in JSON5 mode */
-                char prev = JsonParser_prev_char(p, i);
-                if(prev != Json_elem(JSON_COMMA) && prev !=  Json_elem(JSON_COLON)
-                        && prev != Json_elem(JSON_OBJ_B) &&  prev != Json_elem(JSON_ARR_B)
-                        && prev != '\0') {
-                    pi->error = JSON_ERR_SYN;
-                    break;
-                }
-                pi->quote_begin = 1;
-                pi->quote_char = '\'';
-                pi->token_present = 1;
-                if (pi->is_value) pi->value_was_quoted = 1;
-                break;
-            }
-
-            /* Standard double quote handling */
-            /* escaped quote in value */
-            if(JsonParser_prev_char(p, i) == Json_elem(JSON_LEFT)) {
-                bsstr *data = (!pi->is_value) ? pi->key : pi->value;
-                bsstr_addchr(data, Json_elem(JSON_QUOTE));
-                break;
-            }
-
-            pi->quote_begin = !pi->quote_begin;
-            if (pi->json5_enabled && pi->quote_begin) {
-                pi->quote_char = '"';
-            }
-            if(pi->quote_begin) {
-                pi->token_present = 1;
-                if (pi->is_value) pi->value_was_quoted = 1;
-                char prev = JsonParser_prev_char(p, i);
-                if(prev != Json_elem(JSON_COMMA) && prev !=  Json_elem(JSON_COLON)
-                        && prev != Json_elem(JSON_OBJ_B) &&  prev != Json_elem(JSON_ARR_B)
-                        && prev != '\0') {  /* Allow prev='\0' at buffer start */
-                    pi->error = JSON_ERR_SYN;
-                    break;
-                }
-            }
-
+            pi->error = JSON_ERR_SYN; /* Quotes are handled before the switch. */
             break;
         case JSON_COLON:
             /* Begin value */
             if (!pi->quote_begin) {
+                if (pi->is_value || (!pi->token_present && bsstr_length(pi->key) == 0)) {
+                    pi->error = JSON_ERR_SYN;
+                    break;
+                }
                 pi->is_value = 1;
+                pi->token_present = 0;
+                pi->value_was_quoted = 0;
             } else {
                 /* colon in value */
                 bsstr *data = (!pi->is_value) ? pi->key : pi->value;
@@ -862,28 +842,6 @@ static int JsonParser_internalParse(struct  ParserInternal *pi, const char* json
         case JSON_TAB:
         case JSON_HEX:  /* Unicode escape parsing now supported inside quoted strings */
         case JSON_INVALID:
-            /* Handle single quotes when JSON5 runtime mode enabled */
-            if (pi->json5_enabled && ch == '\'') {
-                if (pi->quote_begin && pi->quote_char == '\'') {
-                    /* Closing single quote in JSON5 mode */
-                    pi->quote_begin = 0;
-                    pi->quote_char = '"';
-                } else if (!pi->quote_begin) {
-                    /* Opening single quote in JSON5 mode */
-                    char prev = JsonParser_prev_char(p, i);
-                    if(prev != Json_elem(JSON_COMMA) && prev !=  Json_elem(JSON_COLON)
-                            && prev != Json_elem(JSON_OBJ_B) &&  prev != Json_elem(JSON_ARR_B)
-                            && prev != '\0') {
-                        pi->error = JSON_ERR_SYN;
-                        break;
-                    }
-                    pi->quote_begin = 1;
-                    pi->quote_char = '\'';
-                    pi->token_present = 1;
-                    if (pi->is_value) pi->value_was_quoted = 1;
-                }
-                break;
-            }
             if (pi->quote_begin && !pi->is_value) {
                 bsstr_addchr(pi->key, ch);
             } else if (pi->quote_begin && pi->is_value) {
