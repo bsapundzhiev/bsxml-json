@@ -231,7 +231,11 @@ static int json5_regression_test(void)
         "{\"unterminated\": \"value}",
         "{\"missing_end\": true",
         "{\"mismatched\": ]}",
-        "{\"comment\": true // not JSON\n}"
+        "{\"comment\": true // not JSON\n}",
+        "{\"bad_escape\": \"\\q\"}",
+        "{\"short_unicode\": \"\\u12\"}",
+        "{\"low_surrogate\": \"\\uDC00\"}",
+        "{\"missing_low_surrogate\": \"\\uD800x\"}"
     };
 
     root = JsonParser_parseJSON5(&parser,

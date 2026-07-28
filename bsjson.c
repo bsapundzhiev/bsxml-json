@@ -601,8 +601,6 @@ static int JsonParser_appendEscapeSequence(bsstr *dest, char esc_char)
 }
 
 
-#define JsonParser_peek_char(p,pos,len)     (pos + 1 < len ? *(p + pos + 1) : '\0')
-
 static int JsonParser_handleQuote(struct ParserInternal *pi, char ch)
 {
     bsstr *data;
@@ -637,6 +635,48 @@ enum JsonLexerResult {
     JSON_LEXER_CONSUMED = 1,
     JSON_LEXER_ERROR = -1
 };
+
+static enum JsonLexerResult JsonLexer_handleEscape(struct ParserInternal *pi,
+                                                    const char *buffer,
+                                                    int *position,
+                                                    int len)
+{
+    bsstr *data;
+    char escape_char;
+    unsigned codepoint;
+    int pair_len;
+
+    if (buffer[*position] != '\\' || !pi->quote_begin) {
+        return JSON_LEXER_NOT_HANDLED;
+    }
+    if (*position + 1 >= len) {
+        pi->error = JSON_ERR_SYN;
+        return JSON_LEXER_ERROR;
+    }
+    data = pi->is_value ? pi->value : pi->key;
+    escape_char = buffer[*position + 1];
+    if (escape_char != 'u') {
+        if (pi->json5_enabled && pi->quote_char == '\'' && escape_char == '\'') {
+            bsstr_addchr(data, '\'');
+        } else if (JsonParser_appendEscapeSequence(data, escape_char) != 0) {
+            pi->error = JSON_ERR_SYN;
+            return JSON_LEXER_ERROR;
+        }
+        (*position)++;
+        return JSON_LEXER_CONSUMED;
+    }
+    if (JsonParser_parseUnicodeEscape(buffer, len, *position + 2, &codepoint) != 0) {
+        pi->error = JSON_ERR_SYN;
+        return JSON_LEXER_ERROR;
+    }
+    pair_len = JsonParser_decodeSurrogatePair(buffer, len, *position + 6, &codepoint);
+    if (pair_len < 0 || JsonParser_encodeUtf8(data, codepoint) != 0) {
+        pi->error = JSON_ERR_SYN;
+        return JSON_LEXER_ERROR;
+    }
+    *position += 5 + pair_len;
+    return JSON_LEXER_CONSUMED;
+}
 
 static enum JsonLexerResult JsonLexer_handleComment(struct ParserInternal *pi,
                                                      const char *buffer,
@@ -716,6 +756,10 @@ static int JsonParser_internalParse(struct  ParserInternal *pi, const char* json
         if (comment_result == JSON_LEXER_CONSUMED) continue;
         if (comment_result == JSON_LEXER_ERROR) break;
 
+        enum JsonLexerResult escape_result = JsonLexer_handleEscape(pi, p, &i, len);
+        if (escape_result == JSON_LEXER_CONSUMED) continue;
+        if (escape_result == JSON_LEXER_ERROR) break;
+
         if (JsonParser_handleQuote(pi, ch)) continue;
 
         if (!pi->quote_begin && ch != ' ' && ch != '\t' && ch != '\r' && ch != '\n'
@@ -791,48 +835,7 @@ static int JsonParser_internalParse(struct  ParserInternal *pi, const char* json
         case JSON_BEGIN:
         case JSON_FORMFEED:
         case JSON_LEFT:
-            if (pi->quote_begin) {
-                bsstr *data = (!pi->is_value) ? pi->key : pi->value;
-                char esc = JsonParser_peek_char(p, i, len);
-                if (esc == '\0') {
-                    pi->error = JSON_ERR_SYN;
-                    break;
-                }
-
-                if (esc == 'u') {
-                    unsigned codepoint;
-                    if (JsonParser_parseUnicodeEscape(p, len, i + 2, &codepoint) != 0) {
-                        pi->error = JSON_ERR_SYN;
-                        i++;  /* Skip backslash */
-                        break;
-                    }
-
-                    int pair_len = JsonParser_decodeSurrogatePair(p, len, i + 6, &codepoint);
-                    if (pair_len < 0) {
-                        pi->error = JSON_ERR_SYN;
-                        i++;  /* Skip backslash */
-                        break;
-                    }
-
-                    if (JsonParser_encodeUtf8(data, codepoint) != 0) {
-                        pi->error = JSON_ERR_SYN;
-                        i++;  /* Skip backslash */
-                        break;
-                    }
-                    
-                    i += 5 + pair_len;  /* Skip \uXXXX or \uXXXX\uYYYY, no additional increment from below */
-                } else {
-                    /* Regular escape sequences like \\n, \\t, etc. */
-                    if (pi->json5_enabled && pi->quote_char == '\'' && esc == '\'') {
-                        bsstr_addchr(data, '\'');
-                    } else if (JsonParser_appendEscapeSequence(data, esc) != 0) {
-                        pi->error = JSON_ERR_SYN;
-                        i++;
-                        break;
-                    }
-                    i++;  /* Skip backslash and escape char */
-                }
-            } else if (pi->is_value && ch != ' ' && ch != '\t' && ch != '\r' && ch != '\n') {
+            if (pi->is_value && ch != ' ' && ch != '\t' && ch != '\r' && ch != '\n') {
                 /* Preserve invalid backslashes for unquoted values */
                 bsstr_addchr(pi->value, ch);
             }
