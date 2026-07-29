@@ -361,7 +361,9 @@ static int streaming_chunk_test(const char *file_name, int json5_enabled)
     expected = JsonNode_getJSON(root);
     JsonNode_deleteTree(root);
 
-    for (size_t chunk_size = 12; chunk_size <= 48; ++chunk_size) {
+    for (size_t chunk_size = 12; chunk_size <= 2048;
+         chunk_size = chunk_size < 48 ? chunk_size + 1
+             : (chunk_size == 48 ? 64 : chunk_size * 2)) {
         String actual;
         root = json5_enabled
             ? JsonParser_parseFileJSON5WithChunkSize(&parser, file_name, chunk_size)
@@ -370,16 +372,16 @@ static int streaming_chunk_test(const char *file_name, int json5_enabled)
             fprintf(stderr, "stream parse failed for %s with chunk %zu: %s\n",
                     file_name, chunk_size, JsonParser_getErrorString(&parser));
             result = -1;
-            continue;
+        } else {
+            actual = JsonNode_getJSON(root);
+            if (strcmp(expected, actual) != 0) {
+                fprintf(stderr, "stream output differs for %s with chunk %zu\n",
+                        file_name, chunk_size);
+                result = -1;
+            }
+            free(actual);
+            JsonNode_deleteTree(root);
         }
-        actual = JsonNode_getJSON(root);
-        if (strcmp(expected, actual) != 0) {
-            fprintf(stderr, "stream output differs for %s with chunk %zu\n",
-                    file_name, chunk_size);
-            result = -1;
-        }
-        free(actual);
-        JsonNode_deleteTree(root);
     }
     free(expected);
     return result;
