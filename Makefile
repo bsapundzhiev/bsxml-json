@@ -2,7 +2,7 @@
 # Makefile
 # 
 CC=gcc
-CFLAGS=-c -g -Wall
+CFLAGS=-c -g -Wall -Wextra -Werror
 LDFLAGS=-lexpat -L .
 USE_EXPAT=1
 

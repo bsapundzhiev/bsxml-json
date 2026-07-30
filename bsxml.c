@@ -32,7 +32,7 @@ XmlNode * XmlNode_Create(const String tag)
     node->m_type = NODE_ROOT;
     node->m_parent = 0;
     node->m_content = NULL;
-    node->m_childs = cpo_array_create(XMLTREE_CHILDSIZE, sizeof(struct XmlNode));
+    node->m_childs = cpo_array_create(XMLTREE_CHILDSIZE, sizeof(XmlNodeRef));
     node->m_attributes = cpo_array_create(XMLTREE_ATTRSIZE, sizeof( struct XmlAttribute) );
     return node;
 }
@@ -59,7 +59,7 @@ asize_t XmlNode_getChildCount(struct XmlNode * node)
 
 XmlNodeRef XmlNode_getParent(struct XmlNode * node)
 {
-    return node->m_parent;
+    return node ? node->m_parent : NULL;
 }
 
 String XmlNode_getContent(struct XmlNode * node)
@@ -107,22 +107,21 @@ void XmlNode_deleteTree(struct XmlNode *root)
     asize_t i;
     if (root == NULL) return;
     for (i=0 ; i < root->m_childs->num; i++) {
-        XmlNode *node = cpo_array_get_at(root->m_childs, i);
+        XmlNodeRef *slot = cpo_array_get_at(root->m_childs, i);
+        XmlNode *node = *slot;
         XmlNode_deleteTree(node);
     }
 
     XmlNode_delete(root);
-
-    if (root->m_type == NODE_ROOT) {
-        free(root);
-    }
+    free(root);
 }
 
 void XmlNode_print(struct XmlNode *root)
 {
     asize_t i;
     for (i=0 ; i < root->m_childs->num; i++) {
-        XmlNode *node = cpo_array_get_at(root->m_childs, i);
+        XmlNodeRef *slot = cpo_array_get_at(root->m_childs, i);
+        XmlNode *node = *slot;
         XmlNode_print(node);
     }
 
@@ -171,19 +170,38 @@ void XmlNode_setAttribute(struct XmlNode *node, const String key, const String v
 
 static int XmlNode_comparer(const void *a, const void *b)
 {
-    return strcmp(((XmlNode *) a)->m_tag, ((XmlNode *) b)->m_tag);
+    const XmlNode *node_a = *(XmlNodeRef const *)a;
+    const XmlNode *node_b = *(XmlNodeRef const *)b;
+    return strcmp(node_a->m_tag, node_b->m_tag);
 }
 
 XmlNodeRef XmlNode_findChild(struct XmlNode *node, const String tag )
 {
-    XmlNode tmpNode = {NODE_CHILD, 0, tag};
-    XmlNodeRef ret = (XmlNodeRef)cpo_array_bsearch(node->m_childs, &tmpNode, XmlNode_comparer);
-    return ret;
+    XmlNode tmpNode = {
+        .m_type = NODE_CHILD,
+        .m_line = 0,
+        .m_tag = tag,
+        .m_content = NULL,
+        .m_parent = NULL,
+        .m_childs = NULL,
+        .m_attributes = NULL
+    };
+    XmlNodeRef key = &tmpNode;
+    XmlNodeRef *ret = cpo_array_bsearch(node->m_childs, &key, XmlNode_comparer);
+    return ret ? *ret : NULL;
 }
 
 XmlNode * XmlNode_createChild(struct XmlNode *node, const String tag, const String text)
 {
-    XmlNodeRef child = cpo_array_push( node->m_childs );
+    XmlNodeRef *slot;
+    XmlNodeRef child = malloc(sizeof(*child));
+    if (!child) return NULL;
+    slot = cpo_array_push(node->m_childs);
+    if (!slot) {
+        free(child);
+        return NULL;
+    }
+    *slot = child;
     child->m_tag = strdup( tag );
     child->m_type = NODE_CHILD;
     child->m_content = NULL;
@@ -192,24 +210,25 @@ XmlNode * XmlNode_createChild(struct XmlNode *node, const String tag, const Stri
         XmlNode_setValue(child, text );
     }
 
-    child->m_childs = cpo_array_create(XMLTREE_CHILDSIZE, sizeof(struct XmlNode));
+    child->m_childs = cpo_array_create(XMLTREE_CHILDSIZE, sizeof(XmlNodeRef));
     child->m_attributes = cpo_array_create(XMLTREE_ATTRSIZE, sizeof( struct XmlAttribute) );
     return child;
 }
 
 void XmlNode_addChild(struct XmlNode *node, const XmlNodeRef child )
 {
-    XmlNodeRef ref = cpo_array_push( node->m_childs );
-    if (ref) {
-        *ref = *child;
-        ref->m_parent = node;
+    XmlNodeRef *slot = cpo_array_push(node->m_childs);
+    if (slot) {
+        *slot = child;
+        child->m_parent = node;
     }
 }
 
 XmlNodeRef XmlNode_getChild(struct XmlNode *node, asize_t i)
 {
     assert( i < node->m_childs->num );
-    return cpo_array_get_at(node->m_childs, i);
+    XmlNodeRef *slot = cpo_array_get_at(node->m_childs, i);
+    return slot ? *slot : NULL;
 }
 
 void XmlNode_getValue(struct XmlNode *node, String *value )
@@ -391,7 +410,8 @@ String XmlNode_getXML(struct XmlNode *node)
     }
 
     for (i = 0; i < node->m_childs->num; i++) {
-        XmlNodeRef child = cpo_array_get_at(node->m_childs, i);
+        XmlNodeRef *slot = cpo_array_get_at(node->m_childs, i);
+        XmlNodeRef child = *slot;
         String childXML = XmlNode_getXML(child);
         bsstr_add(buff, childXML);
         free(childXML);
@@ -458,6 +478,7 @@ static void startElement(void *userData, const char *name, const char **atts)
 static void endElement(void *userData, const char *name )
 {
     XmlParser *parser = (XmlParser *)userData;
+    (void)name;
 
     assert( parser->m_nodeStack->num > 0 );
     if (parser->m_nodeStack->num > 0) {
@@ -481,7 +502,7 @@ static void characterData( void *userData, const char *s, int len )
     }
 }
 
-const String XmlParser_getErrorString(struct XmlParser *parser)
+String XmlParser_getErrorString(struct XmlParser *parser)
 {
     return parser->m_errorString;
 }
@@ -530,7 +551,7 @@ XmlNodeRef XmlParser_parse_file(struct XmlParser *parser,  const String fileName
             buffer[read] = '\0';
         }
         fclose (f);
-        if (read == length) {
+        if (length >= 0 && read == (size_t)length) {
             root = XmlParser_parse(parser,  buffer);
         } else {
             parser->m_errorString = strerror(errno);

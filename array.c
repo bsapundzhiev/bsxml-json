@@ -26,6 +26,10 @@ cpo_array_create(asize_t size, asize_t elem_size)
     }
 
     a->v = calloc(size, elem_size);
+    if (a->v == NULL) {
+        free(a);
+        return NULL;
+    }
     a->num = 0;
     a->max = size;
     a->elem_size = elem_size;
@@ -140,6 +144,7 @@ cpo_array_remove(cpo_array_t *a, asize_t index)
 
 void cpo_array_destroy(cpo_array_t *a)
 {
+    if (!a) return;
     if (a->v) {
         free(a->v);
     }

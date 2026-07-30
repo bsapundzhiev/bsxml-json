@@ -12,7 +12,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
 #include <errno.h>
 #include <limits.h>
 #include "bsstr.h"
@@ -143,18 +142,52 @@ JsonNode * JsonNode_Create()
     node->m_name = NULL;
     node->m_parent = NULL;
     node->m_pairs = cpo_array_create(4, sizeof(JsonPair));
-    node->m_childs =  cpo_array_create(4, sizeof(JsonNode));
+    node->m_childs = cpo_array_create(4, sizeof(JsonNode *));
+    if (!node->m_pairs || !node->m_childs) {
+        cpo_array_destroy(node->m_pairs);
+        cpo_array_destroy(node->m_childs);
+        free(node);
+        return NULL;
+    }
     return node;
+}
+
+JsonNode *JsonNode_getParent(JsonNode *node)
+{
+    return node ? node->m_parent : NULL;
 }
 
 JsonNode * JsonNode_createChild(JsonNode * node, String name, int type)
 {
-    JsonNode * child = (JsonNode *)cpo_array_push(node->m_childs);
+    JsonNode **slot;
+    JsonNode *child;
+    if (!node || !node->m_childs) return NULL;
+
+    child = malloc(sizeof(*child));
+    if (!child) return NULL;
+
     child->m_type = type;
     child->m_parent = node;
     child->m_name = (name != NULL) ? strdup(name) : NULL;
     child->m_pairs = cpo_array_create(4, sizeof(JsonPair));
-    child->m_childs =  cpo_array_create(4, sizeof(JsonNode));
+    child->m_childs = cpo_array_create(4, sizeof(JsonNode *));
+    if ((name && !child->m_name) || !child->m_pairs || !child->m_childs) {
+        free(child->m_name);
+        cpo_array_destroy(child->m_pairs);
+        cpo_array_destroy(child->m_childs);
+        free(child);
+        return NULL;
+    }
+
+    slot = cpo_array_push(node->m_childs);
+    if (!slot) {
+        free(child->m_name);
+        cpo_array_destroy(child->m_pairs);
+        cpo_array_destroy(child->m_childs);
+        free(child);
+        return NULL;
+    }
+    *slot = child;
     return child;
 }
 
@@ -232,14 +265,17 @@ int JsonNode_getPairValueType(JsonNode *node, const String key)
 
 static int JsonNode_comparer(const void *a, const void *b)
 {
-    return strcmp(((JsonNode *) a)->m_name, ((JsonNode *) b)->m_name);
+    const JsonNode *node_a = *(JsonNode * const *)a;
+    const JsonNode *node_b = *(JsonNode * const *)b;
+    return strcmp(node_a->m_name, node_b->m_name);
 }
 
 JsonNode * JsonNode_findChild(JsonNode *node, const String name, int type)
 {
     JsonNode tmpNode = { type, name, NULL, NULL, NULL };
-    JsonNode *ret = (JsonNode*)cpo_array_bsearch(node->m_childs, &tmpNode, JsonNode_comparer);
-    return ret;
+    JsonNode *key = &tmpNode;
+    JsonNode **ret = cpo_array_bsearch(node->m_childs, &key, JsonNode_comparer);
+    return ret ? *ret : NULL;
 }
 
 asize_t JsonNode_getChildCount(JsonNode *node)
@@ -254,7 +290,8 @@ asize_t JsonNode_getPairCount(JsonNode *node)
 
 JsonNode * JsonNode_getChild(JsonNode *node, asize_t index)
 {
-    return (JsonNode *)cpo_array_get_at(node->m_childs, index);
+    JsonNode **slot = cpo_array_get_at(node->m_childs, index);
+    return slot ? *slot : NULL;
 }
 
 JsonPair * JsonNode_getPair(JsonNode *node, asize_t index)
@@ -294,10 +331,7 @@ void JsonNode_deleteTree(JsonNode *root)
     }
 
     JsonNode_delete(root);
-
-    if (root->m_type == JSON_ROOT) {
-        free(root);
-    }
+    free(root);
 }
 
 String JsonNode_getJSON(JsonNode *node)
@@ -392,8 +426,8 @@ struct ParserInternal {
     bsstr *key;
     cpo_array_t stack;
     struct JsonParser *parser;
-    void (*startElem)(struct JsonParser *, const String, int);
-    void (*endElem)(struct JsonParser *, const String, int);
+    int (*startElem)(struct JsonParser *, const String, int);
+    int (*endElem)(struct JsonParser *, const String, int);
     void (*elemData)(struct JsonParser *, const String,  const String);
     /* JSON5 runtime flags */
     int json5_enabled;      /* Enable JSON5 parsing mode */
@@ -502,13 +536,13 @@ static void JsonParser_internalSetJSON5(struct ParserInternal *pi, int enabled)
 static int JsonParser_internalBeginObj(struct  ParserInternal *pi, enum JsonTokenType elemType)
 {
     char *name = bsstr_get_buf(pi->key);
-    struct ParserFrame *frame;
+    struct ParserFrame *frame = JsonParser_currentFrame(pi);
     if (elemType != JSON_ARR_B && elemType != JSON_OBJ_B) {
         free(name);
         pi->error = JSNON_ERR_NOTOBJ;
         return JSON_NOK;
     }
-    if (pi->stack.num == 0) {
+    if (!frame) {
         if (pi->root_started || pi->root_complete) {
             free(name);
             pi->error = JSON_ERR_SYN;
@@ -516,15 +550,14 @@ static int JsonParser_internalBeginObj(struct  ParserInternal *pi, enum JsonToke
         }
         pi->root_started = 1;
     } else {
-        struct ParserFrame *parent = JsonParser_currentFrame(pi);
-        int expects_value = parent->grammar_state == JSON_GRAMMAR_OBJECT_VALUE
-            || parent->grammar_state == JSON_GRAMMAR_ARRAY_VALUE_OR_END;
+        int expects_value = frame->grammar_state == JSON_GRAMMAR_OBJECT_VALUE
+            || frame->grammar_state == JSON_GRAMMAR_ARRAY_VALUE_OR_END;
         if (!expects_value || JsonLexer_hasToken(&pi->lexer)) {
             free(name);
             pi->error = JSON_ERR_SYN;
             return JSON_NOK;
         }
-        parent->after_comma = 0;
+        frame->after_comma = 0;
     }
     frame = stack_push_back(&pi->stack);
     if (!frame) {
@@ -537,8 +570,11 @@ static int JsonParser_internalBeginObj(struct  ParserInternal *pi, enum JsonToke
     frame->grammar_state = elemType == JSON_OBJ_B
         ? JSON_GRAMMAR_OBJECT_KEY_OR_END : JSON_GRAMMAR_ARRAY_VALUE_OR_END;
     frame->after_comma = 0;
-    if (pi->startElem) {
-        pi->startElem(pi->parser, name, (elemType == JSON_ARR_B) ? JSON_ARRAY : JSON_OBJ);
+    if (pi->startElem
+        && pi->startElem(pi->parser, name,
+                         (elemType == JSON_ARR_B) ? JSON_ARRAY : JSON_OBJ) != JSON_OK) {
+        pi->error = JSON_ERR_SYN;
+        return JSON_NOK;
     }
 
     JsonParser_internalReset(pi);
@@ -547,35 +583,37 @@ static int JsonParser_internalBeginObj(struct  ParserInternal *pi, enum JsonToke
 
 static int JsonParser_internalEndObj(struct  ParserInternal *pi, enum JsonTokenType elemType)
 {
-    struct ParserFrame *frame;
+    struct ParserFrame *frame = JsonParser_currentFrame(pi);
     char *name;
 
-    if (pi->stack.num == 0 || (elemType != JSON_ARR_E && elemType != JSON_OBJ_E)) {
+    if (!frame || (elemType != JSON_ARR_E && elemType != JSON_OBJ_E)) {
         pi->error = JSNON_ERR_NOTOBJ;
         return JSON_NOK;
     }
-    frame = JsonParser_currentFrame(pi);
     if ((frame->opening_type == JSON_OBJ_B && elemType != JSON_OBJ_E)
         || (frame->opening_type == JSON_ARR_B && elemType != JSON_ARR_E)) {
         pi->error = JSNON_ERR_NOTOBJ;
         return JSON_NOK;
     }
     frame = stack_pop_back(&pi->stack);
-    if ((name = frame->name)) {
-        if (pi->endElem) {
-            pi->endElem(pi->parser, name, (elemType == JSON_ARR_E) ? JSON_ARRAY : JSON_OBJ);
-        }
+    name = frame->name;
+    if (pi->endElem
+        && pi->endElem(pi->parser, name,
+                       (elemType == JSON_ARR_E) ? JSON_ARRAY : JSON_OBJ) != JSON_OK) {
         free(name);
+        pi->error = JSON_ERR_SYN;
+        return JSON_NOK;
     }
+    free(name);
 
     JsonParser_internalReset(pi);
-    if (pi->stack.num == 0) {
+    frame = JsonParser_currentFrame(pi);
+    if (!frame) {
         pi->root_complete = 1;
     } else {
-        struct ParserFrame *parent = JsonParser_currentFrame(pi);
-        parent->grammar_state = parent->opening_type == JSON_OBJ_B
+        frame->grammar_state = frame->opening_type == JSON_OBJ_B
             ? JSON_GRAMMAR_OBJECT_COMMA_OR_END : JSON_GRAMMAR_ARRAY_COMMA_OR_END;
-        parent->after_comma = 0;
+        frame->after_comma = 0;
     }
     return 0;
 }
@@ -1015,11 +1053,11 @@ static void JsonParser_consumeToken(struct ParserInternal *pi,
         break;
 
     case JSON_COMMA:
-        if (pi->stack.num == 0) {
+        frame = JsonParser_currentFrame(pi);
+        if (!frame) {
             pi->error = JSON_ERR_COMMA;
             break;
         }
-        frame = JsonParser_currentFrame(pi);
         if (JsonLexer_hasToken(&pi->lexer) || bsstr_length(pi->lexer.token)) {
             if (JsonParser_finishScalar(pi, frame) != JSON_OK) break;
         } else if (frame->grammar_state != JSON_GRAMMAR_OBJECT_COMMA_OR_END
@@ -1080,18 +1118,19 @@ static int JsonParser_internalParse(struct ParserInternal *pi, const char *json,
     return pi->error; /*JSON_OK;*/
 }
 
-static void JsonParser_startElem(struct JsonParser *parser, const String name, int type)
+static int JsonParser_startElem(struct JsonParser *parser, const String name, int type)
 {
     void *ptr = NULL;
     JsonNode* parent= NULL, *node=NULL;
 
-    DEBUG_PRINT("Json_startElem %s type %d\n", name,type );
+    if (!parser || !parser->m_nodeStack) return JSON_NOK;
 
     if (parser->m_nodeStack->num > 0) {
         ptr = stack_back(parser->m_nodeStack);
         parent = (JsonNode*) ARR_VAL(ptr);
     } else {
         parser->m_root = JsonNode_Create();
+        if (!parser->m_root) return JSON_NOK;
     }
 
     if (parent) {
@@ -1100,27 +1139,29 @@ static void JsonParser_startElem(struct JsonParser *parser, const String name, i
     } else {
         node = parser->m_root;
     }
+    if (!node) return JSON_NOK;
 
     ptr = stack_push_back(parser->m_nodeStack);
-    if (ptr != NULL) {
-        ARR_VAL(ptr) = ARR_VAL2PTR(node);
-    }
+    if (!ptr) return JSON_NOK;
+
+    ARR_VAL(ptr) = ARR_VAL2PTR(node);
+    return JSON_OK;
 }
 
-static void JsonParser_endElem(struct JsonParser *parser, const String name, int type )
+static int JsonParser_endElem(struct JsonParser *parser, const String name, int type)
 {
     (void)name;
     (void)type;
-    DEBUG_PRINT("Json_endElem %s type %d\n", name,type );
-    assert( parser->m_nodeStack->num > 0 );
-    if (parser->m_nodeStack->num > 0) {
-        stack_pop_back(parser->m_nodeStack);
+
+    if (!parser || !parser->m_nodeStack || parser->m_nodeStack->num == 0) {
+        return JSON_NOK;
     }
+
+    return stack_pop_back(parser->m_nodeStack) ? JSON_OK : JSON_NOK;
 }
 
 static void JsonParser_elemData(struct JsonParser *parser, const String key,  const String value)
 {
-    DEBUG_PRINT("eleme '%s' => '%s'\n", key, value);
     if (parser->m_nodeStack->num > 0) {
         void *ptr = stack_back(parser->m_nodeStack);
         JsonNode *node = (JsonNode *) ARR_VAL(ptr);
@@ -1170,10 +1211,8 @@ static JsonNode *JsonParser_parseMode(JsonParser *parser, const char *json, int 
             parser->m_root = NULL;
         }
     }
-    DEBUG_PRINT("Parsed lines %d\n", pi.line);
     JsonParser_internalDelete(&pi);
     cpo_array_destroy(parser->m_nodeStack);
-    DEBUG_PRINT("-end-\n");
     return root;
 }
 

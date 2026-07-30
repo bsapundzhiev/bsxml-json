@@ -387,6 +387,44 @@ static int streaming_chunk_test(const char *file_name, int json5_enabled)
     return result;
 }
 
+static int parent_helper_test(void)
+{
+    XmlNodeRef xml_root = XmlNode_Create("root");
+    XmlNodeRef xml_parent = XmlNode_createChild(xml_root, "parent", NULL);
+    XmlNodeRef xml_child = XmlNode_createChild(xml_parent, "child", NULL);
+    JsonNode *json_root = JsonNode_Create();
+    JsonNode *json_parent = JsonNode_createObject(json_root, "parent");
+    JsonNode *json_child = JsonNode_createObject(json_parent, "child");
+    int result = 0;
+    int i;
+
+    for (i = 0; i < 9; ++i) {
+        XmlNode_createChild(xml_root, "sibling", NULL);
+    }
+    if (XmlNode_getParent(xml_root) != NULL
+        || XmlNode_getParent(NULL) != NULL
+        || XmlNode_getChild(xml_root, 0) != xml_parent
+        || XmlNode_getParent(xml_child) != xml_parent) {
+        fprintf(stderr, "XML parent helper regression test failed\n");
+        result = -1;
+    }
+
+    for (i = 0; i < 5; ++i) {
+        JsonNode_createObject(json_root, "sibling");
+    }
+    if (JsonNode_getParent(json_root) != NULL
+        || JsonNode_getParent(NULL) != NULL
+        || JsonNode_getChild(json_root, 0) != json_parent
+        || JsonNode_getParent(json_child) != json_parent) {
+        fprintf(stderr, "JSON parent helper regression test failed\n");
+        result = -1;
+    }
+
+    XmlNode_deleteTree(xml_root);
+    JsonNode_deleteTree(json_root);
+    return result;
+}
+
 void json_create_test ()
 {
     JsonNode *root = JsonNode_Create();
@@ -489,6 +527,7 @@ int main(int argc, char **argv)
     json_result |= streaming_chunk_test("test/test2.json", 0);
     json_result |= streaming_chunk_test("test/unicode_test.json", 0);
     json_result |= streaming_chunk_test("test/test_json5_example.json5", 1);
+    json_result |= parent_helper_test();
     if (json_result != 0) {
         return 1;
     }

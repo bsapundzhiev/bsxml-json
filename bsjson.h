@@ -24,13 +24,6 @@
 #define JSON_BUFFER_SIZE 32
 #endif
 
-//#define DEBUG_JSON
-#ifdef DEBUG_JSON
-#define DEBUG_PRINT printf
-#else
-#define DEBUG_PRINT(...)
-#endif
-
 enum {JSON_NOK, JSON_OK };
 enum {JSON_NONE, JSON_ROOT, JSON_OBJ, JSON_ARRAY };
 enum {JSON_VALUE_STRING = 0, JSON_VALUE_NUMBER, JSON_VALUE_BOOL, JSON_VALUE_NULL};
@@ -58,7 +51,7 @@ struct JsonNode {
     String m_name;
     JsonNode *m_parent;
     cpo_array_t *m_pairs; /* array of JsonPair */
-    cpo_array_t *m_childs; /* array of JsonNode */
+    cpo_array_t *m_childs; /* array of JsonNode * */
 };
 
 struct JsonParser {
@@ -83,6 +76,7 @@ JsonNode *JsonNode_Create();
 JsonNode *JsonNode_createChild(JsonNode *node, String name, int type);
 JsonNode *JsonNode_createObject(JsonNode * node, String name);
 JsonNode *JsonNode_createArray(JsonNode * node, String name);
+JsonNode *JsonNode_getParent(JsonNode *node);
 JsonNode * JsonNode_findChild(JsonNode *node, const String name, int type);
 JsonPair * JsonNode_findPair(JsonNode *node, const String key);
 void JsonNode_setPair(JsonNode *node, const String key, const String value );
