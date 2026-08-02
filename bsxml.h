@@ -51,7 +51,7 @@ struct XmlParser {
 
 XmlNodeRef XmlParser_parse_file(XmlParser *parser,  const String fileName );
 XmlNodeRef XmlParser_parse(XmlParser *parser,  const char * xml );
-const String XmlParser_getErrorString(struct XmlParser *parser);
+String XmlParser_getErrorString(struct XmlParser *parser);
 
 struct XmlNode {
     //node type
@@ -62,7 +62,9 @@ struct XmlNode {
     String m_tag;
     //! Content of XML node.
     String m_content;
-    //Xml childs
+    //! Parent XML node.
+    struct XmlNode *m_parent;
+    // Array of XmlNode * children.
     XmlNodes *m_childs;
     //! Xml node attributes.
     XmlAttributes *m_attributes;

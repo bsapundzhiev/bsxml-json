@@ -110,45 +110,6 @@ static const char xml[] = "<?xml version=\"1.0\"?>\n\
     </A:prop>\n\
 </A:propfind>\n";
 
-static const char json [] =
-    "{\n\
-    \"firstName\": \"John\",\n\
-    \"lastName\": \"Smith\",\n\
-    \"age\": 25,\n\
-    \"address\": {\n\
-        \"streetAddress\": \"21 2nd Street\",\n\
-        \"city\": \"New York\",\n\
-        \"state\": \"NY\",\n\
-        \"postalCode\": \"10021\"\n\
-    },\n\
-    \"phoneNumber\": [\n\
-        {\n\
-            \"type\": \"home\",\n\
-            \"number\": \"212 555-1234\"\n\
-        },\n\
-        {\n\
-            \"type\": \"fax\",\n\
-			\"number\": \"646 555-4567\"\n\
-        }\n\
-    ]\n\
-}\n";
-
-static const char json2 [] =
-    "{\n\
-	 \"address\": {\n\
-        \"streetAddress\": \"21 2nd Street\",\n\
-    },\n\
-	\"GlossSeeAlso\": [\n\
-		{ \"servlet-name\": \"cofaxCDS\",\n\
-			\"init-param\": {\n\
-        		\"configGlossary:installationAt\": \"Philadelphia, PA\"\n\
-        	},\n\
-        },\n\
-		\"GML\",\n\
-		\"XML\"\n\
-	]\n\
-}\n";
-
 void printXml( XmlNodeRef node )
 {
     String str = XmlNode_getXML(node);
@@ -231,25 +192,237 @@ void printJson( JsonNode *node )
     free(str);
 }
 
-void json_parser_test()
+int json_parser_test(String param, int json5_enabled)
 {
-    String param = "test/test2.json";
     JsonParser parser;
     JsonNode *root;
+    int result = 0;
     CLK_ON(&t);
-
-    //root = JsonParser_parse(&parser, json2);
-    //root = JsonParser_parse(&parser, json);
     printf("parse file %s\n", param);
-    root = JsonParser_parseFile(&parser, param);
+    root = json5_enabled
+        ? JsonParser_parseFileJSON5(&parser, param)
+        : JsonParser_parseFile(&parser, param);
     if (root) {
-        printJson( root );
+        String serialized = JsonNode_getJSON(root);
+        printf("%s", serialized);
+        if (strcmp(param, "test/test2.json") == 0
+            && (strstr(serialized, "C,Python") != NULL
+                || strstr(serialized, "\",projects") != NULL)) {
+            fprintf(stderr, "file parser corrupted a token boundary\n");
+            result = -1;
+        }
+        free(serialized);
     } else {
         printf("Err: %s\n", JsonParser_getErrorString(&parser));
+        result = -1;
     }
 
     JsonNode_deleteTree(root);
     CLK_OFF(&t);
+    return result;
+}
+
+static int json5_regression_test(void)
+{
+    JsonParser parser;
+    JsonNode *root;
+    int result = 0;
+    const char *invalid_json[] = {
+        "{\"unterminated\": \"value}",
+        "{\"missing_end\": true",
+        "{\"mismatched\": ]}",
+        "{\"comment\": true // not JSON\n}",
+        "{\"bad_escape\": \"\\q\"}",
+        "{\"short_unicode\": \"\\u12\"}",
+        "{\"low_surrogate\": \"\\uDC00\"}",
+        "{\"missing_low_surrogate\": \"\\uD800x\"}",
+        "{\"raw_newline\": \"a\nb\"}",
+        "{\"raw_tab\": \"a\tb\"}",
+        "{}{}",
+        "{\"missing_colon\" {}}",
+        "{\"a\":{} \"missing_comma\":1}",
+        "{\"repeated_colon\":1:2}",
+        "[1:2]",
+        "{\"missing_value\":}",
+        "{\"missing_colon\"}",
+        "[1 2]",
+        "[{}{}]",
+        "{\"a\":[] \"b\":{}}",
+        "{\"a\":,}",
+        "[1,]",
+        "{\"child\":{},}"
+    };
+
+    root = JsonParser_parseJSON5(&parser,
+        "{/* comment */ unquoted: 'it\\'s valid', hex: 0x2a, value: NaN,}");
+    if (!root
+        || !JsonNode_getPairValue(root, "unquoted")
+        || strcmp(JsonNode_getPairValue(root, "unquoted"), "it's valid") != 0
+        || !JsonNode_getPairValue(root, "hex")
+        || strcmp(JsonNode_getPairValue(root, "hex"), "0x2a") != 0
+        || !JsonNode_getPairValue(root, "value")
+        || strcmp(JsonNode_getPairValue(root, "value"), "NaN") != 0) {
+        fprintf(stderr, "JSON5 regression test failed\n");
+        result = -1;
+    }
+    JsonNode_deleteTree(root);
+
+    root = JsonParser_parse(&parser, "{\"structural\":\"{}[],:\",\"empty\":\"\"}");
+    if (!root || !JsonNode_getPairValue(root, "structural")
+        || strcmp(JsonNode_getPairValue(root, "structural"), "{}[],:") != 0
+        || !JsonNode_getPairValue(root, "empty")
+        || strcmp(JsonNode_getPairValue(root, "empty"), "") != 0) {
+        fprintf(stderr, "quoted text token regression test failed\n");
+        result = -1;
+    }
+    JsonNode_deleteTree(root);
+
+    root = JsonParser_parse(&parser, "{\"values\":[1,true,null,-2.5]}");
+    if (!root || JsonNode_getChildCount(root) != 1
+        || JsonNode_getPairCount(JsonNode_getChild(root, 0)) != 4
+        || strcmp(JsonNode_getPair(JsonNode_getChild(root, 0), 0)->key, "1") != 0
+        || strcmp(JsonNode_getPair(JsonNode_getChild(root, 0), 3)->key, "-2.5") != 0) {
+        fprintf(stderr, "bare array value grammar test failed\n");
+        result = -1;
+    }
+    JsonNode_deleteTree(root);
+
+    root = JsonParser_parse(&parser,
+        "{\"emptyObject\":{},\"emptyArray\":[],\"nested\":[{\"x\":1},[2]]}");
+    if (!root) {
+        fprintf(stderr, "valid nested grammar test failed\n");
+        result = -1;
+    }
+    JsonNode_deleteTree(root);
+
+    root = JsonParser_parseJSON5(&parser, "{a:[1,],b:{c:2,},}");
+    if (!root) {
+        fprintf(stderr, "nested JSON5 trailing comma test failed\n");
+        result = -1;
+    }
+    JsonNode_deleteTree(root);
+
+    root = JsonParser_parseJSON5(&parser, "{/* unterminated");
+    if (root != NULL) {
+        fprintf(stderr, "unterminated JSON5 comment was accepted\n");
+        JsonNode_deleteTree(root);
+        result = -1;
+    }
+
+    root = JsonParser_parseJSON5(&parser, "{a: 1/**/}// comment at EOF");
+    if (root == NULL) {
+        fprintf(stderr, "valid JSON5 comment boundaries were rejected\n");
+        result = -1;
+    }
+    JsonNode_deleteTree(root);
+
+    root = JsonParser_parseJSON5(&parser, "{a: 1/*/}");
+    if (root != NULL) {
+        fprintf(stderr, "unterminated short block comment was accepted\n");
+        JsonNode_deleteTree(root);
+        result = -1;
+    }
+
+    root = JsonParser_parse(&parser, "{'not': 'json'}");
+    if (root != NULL) {
+        fprintf(stderr, "single quotes were accepted in strict JSON mode\n");
+        JsonNode_deleteTree(root);
+        result = -1;
+    }
+
+    root = JsonParser_parse(&parser, "{\"trailing\": true,}");
+    if (root != NULL) {
+        fprintf(stderr, "trailing comma was accepted in strict JSON mode\n");
+        JsonNode_deleteTree(root);
+        result = -1;
+    }
+    for (size_t i = 0; i < sizeof(invalid_json) / sizeof(invalid_json[0]); ++i) {
+        root = JsonParser_parse(&parser, invalid_json[i]);
+        if (root != NULL) {
+            fprintf(stderr, "invalid JSON input was accepted: %s\n", invalid_json[i]);
+            JsonNode_deleteTree(root);
+            result = -1;
+        }
+    }
+    return result;
+}
+
+static int streaming_chunk_test(const char *file_name, int json5_enabled)
+{
+    JsonParser parser;
+    JsonNode *root;
+    String expected;
+    int result = 0;
+
+    root = json5_enabled
+        ? JsonParser_parseFileJSON5WithChunkSize(&parser, file_name, 128)
+        : JsonParser_parseFileWithChunkSize(&parser, file_name, 128);
+    if (!root) return -1;
+    expected = JsonNode_getJSON(root);
+    JsonNode_deleteTree(root);
+
+    for (size_t chunk_size = 12; chunk_size <= 2048;
+         chunk_size = chunk_size < 48 ? chunk_size + 1
+             : (chunk_size == 48 ? 64 : chunk_size * 2)) {
+        String actual;
+        root = json5_enabled
+            ? JsonParser_parseFileJSON5WithChunkSize(&parser, file_name, chunk_size)
+            : JsonParser_parseFileWithChunkSize(&parser, file_name, chunk_size);
+        if (!root) {
+            fprintf(stderr, "stream parse failed for %s with chunk %zu: %s\n",
+                    file_name, chunk_size, JsonParser_getErrorString(&parser));
+            result = -1;
+        } else {
+            actual = JsonNode_getJSON(root);
+            if (strcmp(expected, actual) != 0) {
+                fprintf(stderr, "stream output differs for %s with chunk %zu\n",
+                        file_name, chunk_size);
+                result = -1;
+            }
+            free(actual);
+            JsonNode_deleteTree(root);
+        }
+    }
+    free(expected);
+    return result;
+}
+
+static int parent_helper_test(void)
+{
+    XmlNodeRef xml_root = XmlNode_Create("root");
+    XmlNodeRef xml_parent = XmlNode_createChild(xml_root, "parent", NULL);
+    XmlNodeRef xml_child = XmlNode_createChild(xml_parent, "child", NULL);
+    JsonNode *json_root = JsonNode_Create();
+    JsonNode *json_parent = JsonNode_createObject(json_root, "parent");
+    JsonNode *json_child = JsonNode_createObject(json_parent, "child");
+    int result = 0;
+    int i;
+
+    for (i = 0; i < 9; ++i) {
+        XmlNode_createChild(xml_root, "sibling", NULL);
+    }
+    if (XmlNode_getParent(xml_root) != NULL
+        || XmlNode_getParent(NULL) != NULL
+        || XmlNode_getChild(xml_root, 0) != xml_parent
+        || XmlNode_getParent(xml_child) != xml_parent) {
+        fprintf(stderr, "XML parent helper regression test failed\n");
+        result = -1;
+    }
+
+    for (i = 0; i < 5; ++i) {
+        JsonNode_createObject(json_root, "sibling");
+    }
+    if (JsonNode_getParent(json_root) != NULL
+        || JsonNode_getParent(NULL) != NULL
+        || JsonNode_getChild(json_root, 0) != json_parent
+        || JsonNode_getParent(json_child) != json_parent) {
+        fprintf(stderr, "JSON parent helper regression test failed\n");
+        result = -1;
+    }
+
+    XmlNode_deleteTree(xml_root);
+    JsonNode_deleteTree(json_root);
+    return result;
 }
 
 void json_create_test ()
@@ -339,12 +512,25 @@ int main(int argc, char **argv)
 #ifdef _ARRAY_TEST
     array_test();
 #else
+    int json_result = 0;
     file_test(argc,argv);
     create_test ();
     find_test();
     /*test json */
     json_create_test();
-    json_parser_test();
+    json_result |= json_parser_test("test/test2.json", 0);
+    json_result |= json_parser_test("test/unicode_escapes.json", 0);
+    json_result |= json_parser_test("test/unicode_test.json", 0);
+    json_result |= json_parser_test("test/nested.json", 0);
+    json_result |= json_parser_test("test/test_json5_example.json5", 1);
+    json_result |= json5_regression_test();
+    json_result |= streaming_chunk_test("test/test2.json", 0);
+    json_result |= streaming_chunk_test("test/unicode_test.json", 0);
+    json_result |= streaming_chunk_test("test/test_json5_example.json5", 1);
+    json_result |= parent_helper_test();
+    if (json_result != 0) {
+        return 1;
+    }
 #endif
 #ifdef _WIN32
     _CrtDumpMemoryLeaks();

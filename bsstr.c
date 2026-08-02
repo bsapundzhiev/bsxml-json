@@ -75,6 +75,16 @@ void bsstr_add(bsstr* str, const char* string)
     }
 }
 
+void bsstr_add_size(bsstr* str, const char* buffer, int size)
+{
+    if (!str || !buffer || size <= 0) return;
+    if (bsstr_realloc(str, size)) {
+        memcpy(str->string + str->length, buffer, size);
+        str->length += size;
+        str->string[str->length] = '\0';
+    }
+}
+
 /*based on snprintf man */
 void bsstr_printf(bsstr* buf, char* fmt, ...)
 {
